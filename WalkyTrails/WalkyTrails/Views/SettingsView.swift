@@ -14,10 +14,10 @@ private struct ShareableExport: Identifiable {
 }
 
 struct SettingsView: View {
-    @ObservedObject var settings: SettingsStore
-    @ObservedObject var store: WalkStore
-    @ObservedObject var userStore: UserProfileStore
-    @ObservedObject var dogStore: DogProfileStore
+    @EnvironmentObject var settings: SettingsStore
+    @EnvironmentObject var store: WalkStore
+    @EnvironmentObject var userStore: UserProfileStore
+    @EnvironmentObject var dogStore: DogProfileStore
 
     @State private var shareableExport: ShareableExport?
     @State private var exportError: String?
@@ -82,7 +82,7 @@ struct SettingsView: View {
     private var youSection: some View {
         Section {
             NavigationLink {
-                UserProfileView(userStore: userStore, isOnboarding: false)
+                UserProfileView(isOnboarding: false)
             } label: {
                 Label("Your profile", systemImage: "person.circle")
             }
@@ -97,13 +97,13 @@ struct SettingsView: View {
         Section {
             ForEach(dogStore.dogs) { dog in
                 NavigationLink {
-                    DogProfileView(dogStore: dogStore, initialDog: dog, isOnboarding: false)
+                    DogProfileView(initialDog: dog, isOnboarding: false)
                 } label: {
                     Text(dog.name.isEmpty ? "Unnamed dog" : dog.name)
                 }
             }
             NavigationLink {
-                DogProfileView(dogStore: dogStore, initialDog: nil, isOnboarding: false)
+                DogProfileView(initialDog: nil, isOnboarding: false)
             } label: {
                 Label("Add dog", systemImage: "plus.circle")
             }
@@ -304,6 +304,10 @@ struct SettingsView: View {
 
 #Preview {
     NavigationStack {
-        SettingsView(settings: SettingsStore(), store: WalkStore(), userStore: UserProfileStore(), dogStore: DogProfileStore())
+        SettingsView()
+            .environmentObject(SettingsStore())
+            .environmentObject(WalkStore())
+            .environmentObject(UserProfileStore())
+            .environmentObject(DogProfileStore())
     }
 }

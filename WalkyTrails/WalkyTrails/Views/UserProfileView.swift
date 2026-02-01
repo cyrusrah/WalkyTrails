@@ -8,7 +8,7 @@ import SwiftUI
 import UIKit
 
 struct UserProfileView: View {
-    @ObservedObject var userStore: UserProfileStore
+    @EnvironmentObject var userStore: UserProfileStore
     var isOnboarding: Bool = false
     @Environment(\.dismiss) private var dismiss
     @State private var name: String = ""
@@ -107,6 +107,7 @@ struct UserProfileView: View {
 
 #Preview {
     NavigationStack {
-        UserProfileView(userStore: UserProfileStore())
+        UserProfileView()
+            .environmentObject(UserProfileStore())
     }
 }

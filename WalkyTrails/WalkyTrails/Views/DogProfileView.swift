@@ -15,7 +15,7 @@ private let commonBreeds = [
 ]
 
 struct DogProfileView: View {
-    @ObservedObject var dogStore: DogProfileStore
+    @EnvironmentObject var dogStore: DogProfileStore
     /// When nil, adding a new dog; when set, editing.
     var initialDog: Dog?
     var isOnboarding: Bool = false
@@ -187,6 +187,7 @@ struct DogProfileView: View {
 
 #Preview {
     NavigationStack {
-        DogProfileView(dogStore: DogProfileStore(), initialDog: nil)
+        DogProfileView(initialDog: nil)
+            .environmentObject(DogProfileStore())
     }
 }

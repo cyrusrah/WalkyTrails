@@ -7,11 +7,11 @@ import CoreLocation
 import SwiftUI
 
 struct WalkSummaryView: View {
-    @ObservedObject var store: WalkStore
-    @ObservedObject var settings: SettingsStore
-    @ObservedObject var dogStore: DogProfileStore
-    @ObservedObject var locationManager: LocationManager
-    @ObservedObject var weatherService: WeatherService
+    @EnvironmentObject var store: WalkStore
+    @EnvironmentObject var settings: SettingsStore
+    @EnvironmentObject var dogStore: DogProfileStore
+    @EnvironmentObject var locationManager: LocationManager
+    @EnvironmentObject var weatherService: WeatherService
     @State private var notesText = ""
 
     private var walk: Walk? { store.walkToSummarize }
@@ -26,39 +26,12 @@ struct WalkSummaryView: View {
                     .foregroundStyle(.secondary)
             }
         } else if let w = weatherService.currentWeather {
-            HStack(spacing: 8) {
-                Image(systemName: weatherIcon(for: w.weatherCode))
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
-                Text(settings.formattedTemperature(celsius: w.temperatureCelsius))
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                Text(w.conditionDescription)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                Spacer()
-            }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("Weather: \(w.conditionDescription), \(settings.formattedTemperature(celsius: w.temperatureCelsius))")
-            if let suggestion = WeatherSuggestion.suggestion(for: w) {
-                Text(suggestion)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    private func weatherIcon(for code: Int) -> String {
-        switch code {
-        case 0: return "sun.max.fill"
-        case 1, 2, 3: return "cloud.sun.fill"
-        case 45, 48: return "cloud.fog.fill"
-        case 51...67: return "cloud.drizzle.fill"
-        case 71...77: return "cloud.snow.fill"
-        case 80...82: return "cloud.rain.fill"
-        case 85, 86: return "cloud.snow.fill"
-        case 95...99: return "cloud.bolt.rain.fill"
-        default: return "cloud.fill"
+            WeatherDisplayView(
+                temperatureCelsius: w.temperatureCelsius,
+                conditionDescription: w.conditionDescription,
+                suggestionMessage: WeatherSuggestion.suggestion(for: w),
+                settings: settings
+            )
         }
     }
 
@@ -73,21 +46,6 @@ struct WalkSummaryView: View {
         weatherService.load(latitude: coord.latitude, longitude: coord.longitude, temperatureUnit: settings.temperatureUnitApi)
     }
 
-    private func dogNames(for walk: Walk) -> String {
-        let names = walk.dogIds.compactMap { dogStore.dog(byId: $0)?.name }.filter { !$0.isEmpty }
-        let missingCount = walk.dogIds.count - names.count
-        if !names.isEmpty {
-            let part = names.joined(separator: ", ")
-            if missingCount > 0 {
-                let suffix = missingCount == 1 ? "1 dog (no longer in profile)" : "\(missingCount) dogs (no longer in profile)"
-                return "\(part), \(suffix)"
-            }
-            return part
-        }
-        if walk.dogIds.isEmpty { return "No dog" }
-        return walk.dogIds.count == 1 ? "1 dog (no longer in profile)" : "\(walk.dogIds.count) dogs (no longer in profile)"
-    }
-
     var body: some View {
         Group {
             if let w = walk {
@@ -98,12 +56,12 @@ struct WalkSummaryView: View {
                         .accessibilityAddTraits(.isHeader)
                     weatherRow
                     HStack {
-                        Label(formattedDuration(w.durationSeconds), systemImage: "clock")
+                        Label(formattedDuration(seconds: w.durationSeconds), systemImage: "clock")
                         Spacer()
                     }
                     if !w.dogIds.isEmpty {
                         HStack {
-                            Label(dogNames(for: w), systemImage: "pawprint")
+                            Label(dogsSummaryText(walk: w, dogStore: dogStore), systemImage: "pawprint")
                                 .foregroundStyle(.secondary)
                             Spacer()
                         }
@@ -125,9 +83,9 @@ struct WalkSummaryView: View {
                                             .fill(dogColor)
                                             .frame(width: 8, height: 8)
                                     }
-                                    Image(systemName: eventIcon(for: event.type))
-                                        .foregroundStyle(eventColor(for: event.type))
-                                    Text(eventLabel(for: event))
+                                    Image(systemName: event.type.iconName)
+                                        .foregroundStyle(event.type.displayColor)
+                                    Text(eventListLabel(for: event))
                                     Spacer()
                                     Text(event.timestamp, style: .time)
                                         .foregroundStyle(.secondary)
@@ -185,40 +143,16 @@ struct WalkSummaryView: View {
         }
     }
 
-    private func formattedDuration(_ seconds: TimeInterval) -> String {
-        let m = Int(seconds) / 60
-        let s = Int(seconds) % 60
-        return String(format: "%d min %d sec", m, s)
-    }
-
-    private func eventIcon(for type: WalkEvent.EventType) -> String {
-        switch type {
-        case .pee: return "drop.fill"
-        case .poop: return "leaf.fill"
-        case .water: return "cup.and.saucer.fill"
-        case .play: return "tennisball.fill"
-        }
-    }
-
-    private func eventColor(for type: WalkEvent.EventType) -> Color {
-        switch type {
-        case .pee: return .blue
-        case .poop: return .brown
-        case .water: return .cyan
-        case .play: return .orange
-        }
-    }
-
-    private func eventLabel(for event: WalkEvent) -> String {
+    private func eventListLabel(for event: WalkEvent) -> String {
         let typeStr = event.type.rawValue.capitalized
-        guard let id = event.dogId else { return typeStr }
-        guard let name = dogStore.dog(byId: id)?.name, !name.isEmpty else { return "\(typeStr) (no longer in profile)" }
-        return "\(typeStr) (\(name))"
+        guard let label = eventLabel(event: event, dogStore: dogStore) else { return typeStr }
+        return "\(typeStr) (\(label))"
     }
 }
 
 #Preview {
-    WalkSummaryView(store: {
+    WalkSummaryView()
+        .environmentObject({
         let s = WalkStore()
         s.walkToSummarize = Walk(
             startTime: Date().addingTimeInterval(-600),
@@ -227,5 +161,9 @@ struct WalkSummaryView: View {
             events: [WalkEvent(type: .pee), WalkEvent(type: .poop)]
         )
         return s
-    }(), settings: SettingsStore(), dogStore: DogProfileStore(), locationManager: LocationManager(), weatherService: WeatherService())
+        }())
+        .environmentObject(SettingsStore())
+        .environmentObject(DogProfileStore())
+        .environmentObject(LocationManager())
+        .environmentObject(WeatherService())
 }

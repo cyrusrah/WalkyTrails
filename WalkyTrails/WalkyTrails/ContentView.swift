@@ -8,26 +8,26 @@
 import SwiftUI
 
 struct ContentView: View {
-    @ObservedObject var store: WalkStore
-    @ObservedObject var locationManager: LocationManager
-    @ObservedObject var userStore: UserProfileStore
-    @ObservedObject var dogStore: DogProfileStore
-    @ObservedObject var settingsStore: SettingsStore
-    @ObservedObject var weatherService: WeatherService
+    @EnvironmentObject var store: WalkStore
+    @EnvironmentObject var locationManager: LocationManager
+    @EnvironmentObject var userStore: UserProfileStore
+    @EnvironmentObject var dogStore: DogProfileStore
+    @EnvironmentObject var settingsStore: SettingsStore
+    @EnvironmentObject var weatherService: WeatherService
 
     var body: some View {
         Group {
             if store.currentWalk != nil {
-                DuringWalkView(store: store, locationManager: locationManager, settings: settingsStore, dogStore: dogStore, weatherService: weatherService)
+                DuringWalkView()
             } else if store.walkToSummarize != nil {
-                WalkSummaryView(store: store, settings: settingsStore, dogStore: dogStore, locationManager: locationManager, weatherService: weatherService)
+                WalkSummaryView()
             } else if !userStore.hasCompletedOnboarding {
                 NavigationStack {
-                    OnboardingView(userStore: userStore, dogStore: dogStore)
+                    OnboardingView()
                 }
             } else {
                 NavigationStack {
-                    HomeView(store: store, userStore: userStore, dogStore: dogStore, settings: settingsStore)
+                    HomeView()
                 }
             }
         }
@@ -43,5 +43,11 @@ struct ContentView: View {
 }
 
 #Preview {
-    ContentView(store: WalkStore(), locationManager: LocationManager(), userStore: UserProfileStore(), dogStore: DogProfileStore(), settingsStore: SettingsStore(), weatherService: WeatherService())
+    ContentView()
+        .environmentObject(WalkStore())
+        .environmentObject(LocationManager())
+        .environmentObject(UserProfileStore())
+        .environmentObject(DogProfileStore())
+        .environmentObject(SettingsStore())
+        .environmentObject(WeatherService())
 }

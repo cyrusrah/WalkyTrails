@@ -7,10 +7,10 @@ import SwiftUI
 import UIKit
 
 struct HomeView: View {
-    @ObservedObject var store: WalkStore
-    @ObservedObject var userStore: UserProfileStore
-    @ObservedObject var dogStore: DogProfileStore
-    @ObservedObject var settings: SettingsStore
+    @EnvironmentObject var store: WalkStore
+    @EnvironmentObject var userStore: UserProfileStore
+    @EnvironmentObject var dogStore: DogProfileStore
+    @EnvironmentObject var settings: SettingsStore
     @State private var showStartWalkSheet = false
     @State private var selectedDogIds: Set<UUID> = []
 
@@ -120,7 +120,7 @@ struct HomeView: View {
                 if isShowing { selectedDogIds = Set(dogStore.dogs.map(\.id)) }
             }
             NavigationLink {
-                WalkHistoryView(store: store, settings: settings, dogStore: dogStore)
+                WalkHistoryView()
             } label: {
                 Label("History", systemImage: "clock.arrow.circlepath")
                     .font(.body)
@@ -138,7 +138,7 @@ struct HomeView: View {
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 NavigationLink {
-                    UserProfileView(userStore: userStore, isOnboarding: false)
+                    UserProfileView(isOnboarding: false)
                 } label: {
                     profileCircle
                 }
@@ -148,7 +148,7 @@ struct HomeView: View {
             }
             ToolbarItem(placement: .topBarTrailing) {
                 NavigationLink {
-                    SettingsView(settings: settings, store: store, userStore: userStore, dogStore: dogStore)
+                    SettingsView()
                 } label: {
                     Image(systemName: "gearshape")
                 }
@@ -189,7 +189,7 @@ struct HomeView: View {
                         Text("Add a dog to track who's on the walk.")
                             .foregroundStyle(.secondary)
                         NavigationLink {
-                            DogProfileView(dogStore: dogStore, initialDog: nil, isOnboarding: false)
+                            DogProfileView(initialDog: nil, isOnboarding: false)
                         } label: {
                             Label("Add dog", systemImage: "plus.circle.fill")
                         }
@@ -228,7 +228,7 @@ struct HomeView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     if dogStore.dogs.isEmpty {
                         NavigationLink {
-                            DogProfileView(dogStore: dogStore, initialDog: nil, isOnboarding: false)
+                            DogProfileView(initialDog: nil, isOnboarding: false)
                         } label: {
                             Text("Add dog")
                         }
@@ -248,5 +248,9 @@ struct HomeView: View {
 }
 
 #Preview {
-    HomeView(store: WalkStore(), userStore: UserProfileStore(), dogStore: DogProfileStore(), settings: SettingsStore())
+    HomeView()
+        .environmentObject(WalkStore())
+        .environmentObject(UserProfileStore())
+        .environmentObject(DogProfileStore())
+        .environmentObject(SettingsStore())
 }

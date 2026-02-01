@@ -7,8 +7,8 @@ import SwiftUI
 
 /// Onboarding flow: 1) Your profile (name, photo), 2) Add first dog or Skip.
 struct OnboardingView: View {
-    @ObservedObject var userStore: UserProfileStore
-    @ObservedObject var dogStore: DogProfileStore
+    @EnvironmentObject var userStore: UserProfileStore
+    @EnvironmentObject var dogStore: DogProfileStore
     @State private var step: Step = .userProfile
 
     enum Step {
@@ -20,7 +20,7 @@ struct OnboardingView: View {
         Group {
             switch step {
             case .userProfile:
-                UserProfileView(userStore: userStore, isOnboarding: true)
+                UserProfileView(isOnboarding: true)
                     .toolbar {
                         ToolbarItem(placement: .primaryAction) {
                             Button("Next") {
@@ -30,7 +30,7 @@ struct OnboardingView: View {
                         }
                     }
             case .addDog:
-                DogProfileView(dogStore: dogStore, initialDog: nil, isOnboarding: true, onComplete: {
+                DogProfileView(initialDog: nil, isOnboarding: true, onComplete: {
                     userStore.completeOnboarding()
                 }, onSkip: {
                     userStore.completeOnboarding()
@@ -42,6 +42,8 @@ struct OnboardingView: View {
 
 #Preview {
     NavigationStack {
-        OnboardingView(userStore: UserProfileStore(), dogStore: DogProfileStore())
+        OnboardingView()
+            .environmentObject(UserProfileStore())
+            .environmentObject(DogProfileStore())
     }
 }

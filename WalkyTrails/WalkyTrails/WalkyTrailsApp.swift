@@ -31,7 +31,13 @@ struct WalkyTrailsApp: App {
                             }
                         }
                 } else {
-                    ContentView(store: store, locationManager: locationManager, userStore: userStore, dogStore: dogStore, settingsStore: settingsStore, weatherService: weatherService)
+                    ContentView()
+                        .environmentObject(store)
+                        .environmentObject(locationManager)
+                        .environmentObject(userStore)
+                        .environmentObject(dogStore)
+                        .environmentObject(settingsStore)
+                        .environmentObject(weatherService)
                 }
             }
             .onChange(of: scenePhase) { _, newPhase in

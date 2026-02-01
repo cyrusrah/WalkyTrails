@@ -15,17 +15,17 @@ struct EventMarkerView: View {
     var body: some View {
         let ringColor = event.dogId.flatMap { DogColors.color(for: $0, in: dogIds) }
         ZStack {
-            if let color = ringColor {
-                Circle()
-                    .stroke(color, lineWidth: 3)
-                    .frame(width: 36, height: 36)
-            }
             Image(systemName: self.iconName(for: event.type))
                 .font(.title2)
                 .foregroundStyle(self.displayColor(for: event.type))
                 .padding(8)
                 .background(.background, in: Circle())
                 .shadow(radius: 2)
+            if let color = ringColor {
+                Circle()
+                    .stroke(color, lineWidth: 3)
+                    .frame(width: 44, height: 44)
+            }
         }
         .accessibilityHidden(true)
     }
