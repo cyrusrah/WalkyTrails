@@ -8,7 +8,11 @@ import MapKit
 import SwiftUI
 
 struct WalkDetailView: View {
+    @ObservedObject var store: WalkStore
+    @ObservedObject var settings: SettingsStore
     let walk: Walk
+    @State private var notesText: String = ""
+    @State private var notesSaved = false
 
     private var routeCoords: [CLLocationCoordinate2D] {
         walk.routeForMap.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
@@ -34,9 +38,9 @@ struct WalkDetailView: View {
                         ForEach(walk.events.filter { $0.coordinate != nil }) { event in
                             if let coord = event.coordinate {
                                 Annotation("", coordinate: CLLocationCoordinate2D(latitude: coord.latitude, longitude: coord.longitude)) {
-                                    Image(systemName: event.type == .pee ? "drop.fill" : "leaf.fill")
+                                    Image(systemName: eventIcon(for: event.type))
                                         .font(.title2)
-                                        .foregroundStyle(event.type == .pee ? .blue : .brown)
+                                        .foregroundStyle(eventColor(for: event.type))
                                         .padding(8)
                                         .background(.background, in: Circle())
                                         .shadow(radius: 2)
@@ -44,32 +48,49 @@ struct WalkDetailView: View {
                             }
                         }
                     }
-                    .mapStyle(.standard(elevation: .realistic))
+                    .mapStyle(settings.mapStylePreference.mapStyle)
                     .frame(height: 200)
                     .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Walk route map with event markers")
                 }
             }
 
             Section {
                 Label(formattedDuration(walk.durationSeconds), systemImage: "clock")
                 if walk.distanceMeters > 0 {
-                    Label(String(format: "%.2f km", walk.distanceMeters / 1000), systemImage: "location")
+                    Label(settings.formattedDistance(walk.distanceMeters), systemImage: "location")
                 }
-                Text(walk.startTime, style: .date)
-                Text(walk.startTime, style: .time)
+                Text(settings.formattedDate(walk.startTime))
+                Text(settings.formattedTime(walk.startTime))
             } header: {
                 Text("Summary")
+            }
+
+            Section {
+                TextField("Add notes", text: $notesText, axis: .vertical)
+                    .lineLimit(2...5)
+                    .onChange(of: notesText) { _, new in
+                        store.updateNotes(for: walk.id, notes: new)
+                        notesSaved = true
+                    }
+                    .accessibilityLabel("Walk notes")
+                    .accessibilityHint("Notes are saved automatically")
+            } header: {
+                Text("Notes")
+            } footer: {
+                if notesSaved { Text("Saved") .foregroundStyle(.secondary) }
             }
 
             if !walk.events.isEmpty {
                 Section {
                     ForEach(walk.events) { event in
                         HStack {
-                            Image(systemName: event.type == .pee ? "drop.fill" : "leaf.fill")
-                                .foregroundStyle(event.type == .pee ? .blue : .brown)
+                            Image(systemName: eventIcon(for: event.type))
+                                .foregroundStyle(eventColor(for: event.type))
                             Text(event.type.rawValue.capitalized)
                             Spacer()
-                            Text(event.timestamp, style: .time)
+                            Text(settings.formattedTime(event.timestamp))
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -80,6 +101,7 @@ struct WalkDetailView: View {
         }
         .navigationTitle("Walk")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear { notesText = walk.notes ?? "" }
     }
 
     private func regionFitting(coordinates: [CLLocationCoordinate2D]) -> MKCoordinateRegion {
@@ -112,11 +134,29 @@ struct WalkDetailView: View {
         let s = Int(seconds) % 60
         return String(format: "%d min %d sec", m, s)
     }
+
+    private func eventIcon(for type: WalkEvent.EventType) -> String {
+        switch type {
+        case .pee: return "drop.fill"
+        case .poop: return "leaf.fill"
+        case .water: return "cup.and.saucer.fill"
+        case .play: return "tennisball.fill"
+        }
+    }
+
+    private func eventColor(for type: WalkEvent.EventType) -> Color {
+        switch type {
+        case .pee: return .blue
+        case .poop: return .brown
+        case .water: return .cyan
+        case .play: return .orange
+        }
+    }
 }
 
 #Preview {
     NavigationStack {
-        WalkDetailView(walk: Walk(
+        WalkDetailView(store: WalkStore(), settings: SettingsStore(), walk: Walk(
             startTime: Date().addingTimeInterval(-600),
             endTime: Date(),
             distanceMeters: 0,

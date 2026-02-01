@@ -83,12 +83,16 @@ struct DogProfileView: View {
                 .onChange(of: selectedItem) { _, newItem in
                     Task { await loadAndSavePhoto(from: newItem) }
                 }
+                .accessibilityLabel("Change dog photo")
+                .accessibilityHint("Pick a photo from your library")
                 if dogStore.dog.photoData != nil {
                     Button(role: .destructive) {
                         dogStore.updatePhoto(nil)
                     } label: {
                         Label("Remove Photo", systemImage: "trash")
                     }
+                    .accessibilityLabel("Remove dog photo")
+                    .accessibilityHint("Removes the current photo")
                 }
             } header: {
                 Text("Photo")
@@ -96,6 +100,7 @@ struct DogProfileView: View {
 
             Section {
                 TextField("Name", text: $name, prompt: Text("Dog's name"))
+                    .accessibilityLabel("Dog's name")
                 Picker("Breed", selection: $selectedBreed) {
                     Text("Select breed").tag("")
                     ForEach(commonBreeds.filter { !$0.isEmpty }, id: \.self) { breed in
@@ -116,6 +121,8 @@ struct DogProfileView: View {
                     } label: {
                         Label("Delete Profile", systemImage: "trash")
                     }
+                    .accessibilityLabel("Delete dog profile")
+                    .accessibilityHint("Removes the profile; you can set it up again later")
                 }
             }
         }
@@ -128,6 +135,8 @@ struct DogProfileView: View {
                     saveAndDismissIfNeeded()
                 }
                 .disabled(!canSave)
+                .accessibilityLabel("Save dog profile")
+                .accessibilityHint(canSave ? "Saves name, breed, and photo" : "Enter a name or breed to save")
             }
         }
         .confirmationDialog("Delete Profile", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {

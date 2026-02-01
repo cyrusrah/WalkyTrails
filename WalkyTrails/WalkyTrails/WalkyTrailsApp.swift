@@ -9,9 +9,11 @@ import SwiftUI
 
 @main
 struct WalkyTrailsApp: App {
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var store = WalkStore()
     @StateObject private var locationManager = LocationManager()
     @StateObject private var dogStore = DogProfileStore()
+    @StateObject private var settingsStore = SettingsStore()
     @State private var showSplash = true
 
     var body: some Scene {
@@ -27,8 +29,11 @@ struct WalkyTrailsApp: App {
                             }
                         }
                 } else {
-                    ContentView(store: store, locationManager: locationManager, dogStore: dogStore)
+                    ContentView(store: store, locationManager: locationManager, dogStore: dogStore, settingsStore: settingsStore)
                 }
+            }
+            .onChange(of: scenePhase) { _, newPhase in
+                if newPhase == .active { store.reloadCurrentWalkFromStorage() }
             }
         }
     }

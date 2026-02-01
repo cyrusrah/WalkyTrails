@@ -7,6 +7,7 @@ import SwiftUI
 
 struct WalkHistoryView: View {
     @ObservedObject var store: WalkStore
+    @ObservedObject var settings: SettingsStore
 
     var body: some View {
         Group {
@@ -19,10 +20,10 @@ struct WalkHistoryView: View {
             } else {
                 List(store.walks) { walk in
                     NavigationLink {
-                        WalkDetailView(walk: walk)
+                        WalkDetailView(store: store, settings: settings, walk: walk)
                     } label: {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(walk.startTime, style: .date)
+                            Text(settings.formattedDate(walk.startTime))
                                 .font(.headline)
                             Text(formattedDuration(walk.durationSeconds))
                                 .font(.subheadline)
@@ -35,6 +36,8 @@ struct WalkHistoryView: View {
                         }
                         .padding(.vertical, 4)
                     }
+                    .accessibilityLabel("Walk on \(settings.formattedDate(walk.startTime)), \(formattedDuration(walk.durationSeconds))\(walk.events.isEmpty ? "" : ", \(walk.events.count) events")")
+                    .accessibilityHint("Opens walk details")
                 }
                 .listStyle(.plain)
             }
@@ -59,6 +62,6 @@ struct WalkHistoryView: View {
                 Walk(startTime: Date().addingTimeInterval(-86400), endTime: Date().addingTimeInterval(-82800), distanceMeters: 0)
             ]
             return s
-        }())
+        }(), settings: SettingsStore())
     }
 }

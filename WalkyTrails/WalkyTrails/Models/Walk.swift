@@ -42,6 +42,8 @@ struct WalkEvent: Codable, Identifiable {
     enum EventType: String, Codable, CaseIterable {
         case pee
         case poop
+        case water
+        case play
     }
 }
 
@@ -54,6 +56,8 @@ struct Walk: Codable, Identifiable {
     var events: [WalkEvent]
     /// Full path; nil for walks saved before route recording.
     var routeCoordinates: [Coordinate]?
+    /// Optional free-text notes (e.g. "Sunny, met a friend").
+    var notes: String?
 
     var durationSeconds: TimeInterval {
         let end = endTime ?? Date()
@@ -75,7 +79,8 @@ struct Walk: Codable, Identifiable {
         endTime: Date? = nil,
         distanceMeters: Double = 0,
         events: [WalkEvent] = [],
-        routeCoordinates: [Coordinate]? = nil
+        routeCoordinates: [Coordinate]? = nil,
+        notes: String? = nil
     ) {
         self.id = id
         self.startTime = startTime
@@ -83,6 +88,7 @@ struct Walk: Codable, Identifiable {
         self.distanceMeters = distanceMeters
         self.events = events
         self.routeCoordinates = routeCoordinates
+        self.notes = notes
     }
 
     mutating func end(route: [Coordinate]) {

@@ -7,6 +7,8 @@ import SwiftUI
 
 struct WalkSummaryView: View {
     @ObservedObject var store: WalkStore
+    @ObservedObject var settings: SettingsStore
+    @State private var notesText = ""
 
     private var walk: Walk? { store.walkToSummarize }
 
@@ -17,13 +19,14 @@ struct WalkSummaryView: View {
                     Text("Walk summary")
                         .font(.title2)
                         .fontWeight(.semibold)
+                        .accessibilityAddTraits(.isHeader)
                     HStack {
                         Label(formattedDuration(w.durationSeconds), systemImage: "clock")
                         Spacer()
                     }
                     if w.distanceMeters > 0 {
                         HStack {
-                            Label(String(format: "%.2f km", w.distanceMeters / 1000), systemImage: "location")
+                            Label(settings.formattedDistance(w.distanceMeters), systemImage: "location")
                             Spacer()
                         }
                     }
@@ -33,7 +36,8 @@ struct WalkSummaryView: View {
                                 .font(.headline)
                             ForEach(w.events) { event in
                                 HStack {
-                                    Image(systemName: event.type == .pee ? "drop" : "leaf")
+                                    Image(systemName: eventIcon(for: event.type))
+                                        .foregroundStyle(eventColor(for: event.type))
                                     Text(event.type.rawValue.capitalized)
                                     Spacer()
                                     Text(event.timestamp, style: .time)
@@ -42,16 +46,29 @@ struct WalkSummaryView: View {
                             }
                         }
                     }
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Notes (optional)")
+                            .font(.headline)
+                        TextField("e.g. Sunny, met a friend", text: $notesText, axis: .vertical)
+                            .textFieldStyle(.roundedBorder)
+                            .lineLimit(2...5)
+                            .onChange(of: notesText) { _, new in store.setNotesForWalkToSummarize(new) }
+                    }
+                    .onAppear { notesText = w.notes ?? "" }
                     Spacer()
                     HStack(spacing: 16) {
                         Button("Discard") {
                             store.discardWalk()
                         }
                         .buttonStyle(.bordered)
+                        .accessibilityLabel("Discard walk")
+                        .accessibilityHint("Deletes this walk without saving")
                         Button("Save") {
                             store.saveWalk()
                         }
                         .buttonStyle(.borderedProminent)
+                        .accessibilityLabel("Save walk")
+                        .accessibilityHint("Saves walk to history")
                     }
                     .frame(maxWidth: .infinity)
                 }
@@ -68,6 +85,24 @@ struct WalkSummaryView: View {
         let s = Int(seconds) % 60
         return String(format: "%d min %d sec", m, s)
     }
+
+    private func eventIcon(for type: WalkEvent.EventType) -> String {
+        switch type {
+        case .pee: return "drop.fill"
+        case .poop: return "leaf.fill"
+        case .water: return "cup.and.saucer.fill"
+        case .play: return "tennisball.fill"
+        }
+    }
+
+    private func eventColor(for type: WalkEvent.EventType) -> Color {
+        switch type {
+        case .pee: return .blue
+        case .poop: return .brown
+        case .water: return .cyan
+        case .play: return .orange
+        }
+    }
 }
 
 #Preview {
@@ -80,5 +115,5 @@ struct WalkSummaryView: View {
             events: [WalkEvent(type: .pee), WalkEvent(type: .poop)]
         )
         return s
-    }())
+    }(), settings: SettingsStore())
 }

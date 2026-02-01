@@ -11,20 +11,21 @@ struct ContentView: View {
     @ObservedObject var store: WalkStore
     @ObservedObject var locationManager: LocationManager
     @ObservedObject var dogStore: DogProfileStore
+    @ObservedObject var settingsStore: SettingsStore
 
     var body: some View {
         Group {
             if store.currentWalk != nil {
-                DuringWalkView(store: store, locationManager: locationManager)
+                DuringWalkView(store: store, locationManager: locationManager, settings: settingsStore)
             } else if store.walkToSummarize != nil {
-                WalkSummaryView(store: store)
+                WalkSummaryView(store: store, settings: settingsStore)
             } else if !dogStore.dog.hasContent {
                 NavigationStack {
                     DogProfileView(dogStore: dogStore, isOnboarding: true)
                 }
             } else {
                 NavigationStack {
-                    HomeView(store: store, dogStore: dogStore)
+                    HomeView(store: store, dogStore: dogStore, settings: settingsStore)
                 }
             }
         }
@@ -40,5 +41,5 @@ struct ContentView: View {
 }
 
 #Preview {
-    ContentView(store: WalkStore(), locationManager: LocationManager(), dogStore: DogProfileStore())
+    ContentView(store: WalkStore(), locationManager: LocationManager(), dogStore: DogProfileStore(), settingsStore: SettingsStore())
 }
