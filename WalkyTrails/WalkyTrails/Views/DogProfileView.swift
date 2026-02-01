@@ -8,52 +8,30 @@ import SwiftUI
 import UIKit
 
 private let commonBreeds = [
-    "", // "Select breed" / none
-    "Vizsla",
-    "Weimaraner",
-    "German Shorthaired",
-    "German Wirehaired",
-    "German Shepherd",
-    "Labrador Retriever",
-    "Golden Retriever",
-    "German Shepherd",
-    "French Bulldog",
-    "Bulldog",
-    "Poodle",
-    "Beagle",
-    "Rottweiler",
-    "Yorkshire Terrier",
-    "Boxer",
-    "Dachshund",
-    "Shih Tzu",
-    "Australian Shepherd",
-    "Pembroke Welsh Corgi",
-    "Chihuahua",
-    "Cavalier King Charles Spaniel",
-    "Husky",
-    "Mixed",
-    "Other"
+    "", "Vizsla", "Weimaraner", "German Shorthaired", "German Wirehaired", "German Shepherd",
+    "Labrador Retriever", "Golden Retriever", "French Bulldog", "Bulldog", "Poodle", "Beagle",
+    "Rottweiler", "Yorkshire Terrier", "Boxer", "Dachshund", "Shih Tzu", "Australian Shepherd",
+    "Pembroke Welsh Corgi", "Chihuahua", "Cavalier King Charles Spaniel", "Husky", "Mixed", "Other"
 ]
 
 struct DogProfileView: View {
     @ObservedObject var dogStore: DogProfileStore
-    /// When nil, adding a new dog; when non-nil, editing that dog.
-    var initialDog: Dog? = nil
-    /// When true, shown as first-run onboarding (no back button); after save, app shows Home.
+    /// When nil, adding a new dog; when set, editing.
+    var initialDog: Dog?
     var isOnboarding: Bool = false
+    var onComplete: (() -> Void)?
+    var onSkip: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
     @State private var name: String = ""
     @State private var selectedBreed: String = ""
     @State private var customBreed: String = ""
-    @State private var selectedItem: PhotosPickerItem?
+    @State private var selectedItem: PhotosUI.PhotosPickerItem?
     @State private var newPhotoData: Data?
     @State private var showDeleteConfirmation = false
 
-    private var isEditing: Bool { initialDog != nil }
-    private var currentDog: Dog? { initialDog ?? dogStore.firstDog }
-
     private let photoSize: CGFloat = 100
     private let jpegQuality: CGFloat = 0.7
+    private var isAddMode: Bool { initialDog == nil }
 
     private var displayBreed: String {
         if selectedBreed.isEmpty || selectedBreed == "Other" {
@@ -65,7 +43,12 @@ struct DogProfileView: View {
     private var canSave: Bool {
         !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || !displayBreed.isEmpty
-            || dogStore.dog.photoData != nil
+            || (isAddMode ? newPhotoData != nil : (dogStore.dog(byId: initialDog!.id)?.photoData != nil))
+    }
+
+    private var currentPhotoData: Data? {
+        if isAddMode { return newPhotoData }
+        return dogStore.dog(byId: initialDog!.id)?.photoData
     }
 
     var body: some View {
@@ -79,100 +62,90 @@ struct DogProfileView: View {
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 4, trailing: 16))
 
-                PhotosPicker(
-                    selection: $selectedItem,
-                    matching: .images,
-                    photoLibrary: .shared()
-                ) {
+                PhotosPicker(selection: $selectedItem, matching: .images, photoLibrary: .shared()) {
                     Label("Change Photo", systemImage: "photo.on.rectangle.angled")
                 }
                 .onChange(of: selectedItem) { _, newItem in
                     Task { await loadAndSavePhoto(from: newItem) }
                 }
                 .accessibilityLabel("Change dog photo")
-                .accessibilityHint("Pick a photo from your library")
-                if photoDataForDisplay != nil {
+                if currentPhotoData != nil {
                     Button(role: .destructive) {
-                        if let id = currentDog?.id {
-                            dogStore.updatePhoto(forDogId: id, imageData: nil)
-                        } else {
-                            newPhotoData = nil
-                        }
+                        if isAddMode { newPhotoData = nil }
+                        else if let id = initialDog?.id { dogStore.updatePhoto(forDogId: id, imageData: nil) }
                     } label: {
                         Label("Remove Photo", systemImage: "trash")
                     }
-                    .accessibilityLabel("Remove dog photo")
-                    .accessibilityHint("Removes the current photo")
                 }
-            } header: {
-                Text("Photo")
-            }
+            } header: { Text("Photo") }
 
             Section {
                 TextField("Name", text: $name, prompt: Text("Dog's name"))
-                    .accessibilityLabel("Dog's name")
                 Picker("Breed", selection: $selectedBreed) {
                     Text("Select breed").tag("")
-                    ForEach(commonBreeds.filter { !$0.isEmpty }, id: \.self) { breed in
-                        Text(breed).tag(breed)
-                    }
+                    ForEach(commonBreeds.filter { !$0.isEmpty }, id: \.self) { Text($0).tag($0) }
                 }
                 if selectedBreed == "Other" {
                     TextField("Breed name", text: $customBreed, prompt: Text("Enter breed"))
                 }
-            } header: {
-                Text("Details")
-            }
+            } header: { Text("Details") }
 
-            if !isOnboarding && isEditing {
+            if !isOnboarding && !isAddMode {
                 Section {
-                    Button(role: .destructive) {
-                        showDeleteConfirmation = true
-                    } label: {
-                        Label("Delete Profile", systemImage: "trash")
+                    Button(role: .destructive) { showDeleteConfirmation = true } label: {
+                        Label("Delete Dog", systemImage: "trash")
                     }
-                    .accessibilityLabel("Delete dog profile")
-                    .accessibilityHint("Removes the profile; you can set it up again later")
                 }
             }
         }
-        .navigationTitle(isOnboarding ? "Set Up Your Dog" : "Dog Profile")
+        .navigationTitle(isOnboarding ? "Add Your First Dog" : (isAddMode ? "New Dog" : "Edit Dog"))
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(isOnboarding)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button("Save") {
-                    saveAndDismissIfNeeded()
+                    saveAndDismiss()
                 }
                 .disabled(!canSave)
-                .accessibilityLabel("Save dog profile")
-                .accessibilityHint(canSave ? "Saves name, breed, and photo" : "Enter a name or breed to save")
+                .accessibilityLabel("Save dog")
+            }
+            if isOnboarding && isAddMode {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Skip") {
+                        onSkip?()
+                    }
+                    .accessibilityLabel("Skip adding a dog")
+                }
             }
         }
-        .confirmationDialog("Delete Profile", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
+        .confirmationDialog("Delete Dog", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
             Button("Delete", role: .destructive) {
-                dogStore.clearProfile()
+                if let id = initialDog?.id {
+                    dogStore.deleteDog(id: id)
+                    dismiss()
+                }
             }
             Button("Cancel", role: .cancel) { }
         } message: {
-            Text("This will remove the dog profile. You can set it up again anytime.")
+            Text("This will remove this dog from your profile. Walks with this dog will still appear in history.")
         }
         .onAppear {
-            name = dogStore.dog.name
-            let saved = dogStore.dog.breed
-            if commonBreeds.contains(saved) && !saved.isEmpty {
-                selectedBreed = saved
-                customBreed = ""
-            } else {
-                selectedBreed = saved.isEmpty ? "" : "Other"
-                customBreed = saved
+            if let dog = initialDog {
+                name = dog.name
+                if commonBreeds.contains(dog.breed) && !dog.breed.isEmpty {
+                    selectedBreed = dog.breed
+                    customBreed = ""
+                } else {
+                    selectedBreed = dog.breed.isEmpty ? "" : "Other"
+                    customBreed = dog.breed
+                }
             }
         }
     }
 
     @ViewBuilder
     private var photoView: some View {
-        if let data = photoDataForDisplay, let uiImage = UIImage(data: data) {
+        if let data = currentPhotoData, let uiImage = UIImage(data: data) {
             Image(uiImage: uiImage)
                 .resizable()
                 .scaledToFill()
@@ -192,26 +165,22 @@ struct DogProfileView: View {
         guard let uiImage = UIImage(data: data) else { return }
         let jpeg = uiImage.jpegData(compressionQuality: jpegQuality)
         await MainActor.run {
-            if let id = currentDog?.id {
-                dogStore.updatePhoto(forDogId: id, imageData: jpeg)
-            } else {
-                newPhotoData = jpeg
-            }
+            if isAddMode { newPhotoData = jpeg }
+            else if let id = initialDog?.id { dogStore.updatePhoto(forDogId: id, imageData: jpeg) }
         }
     }
 
-    private func saveAndDismissIfNeeded() {
-        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        let photo = isEditing ? currentDog?.photoData : newPhotoData
-        if let existing = initialDog {
-            let updated = Dog(id: existing.id, name: trimmedName, breed: displayBreed, photoData: photo ?? existing.photoData)
+    private func saveAndDismiss() {
+        if isAddMode {
+            let dog = Dog(name: name.trimmingCharacters(in: .whitespacesAndNewlines), breed: displayBreed, photoData: newPhotoData)
+            dogStore.addDog(dog)
+            if isOnboarding { onComplete?() }
+            else { dismiss() }
+        } else if let dog = initialDog {
+            let updated = Dog(id: dog.id, name: name.trimmingCharacters(in: .whitespacesAndNewlines), breed: displayBreed, photoData: dogStore.dog(byId: dog.id)?.photoData)
             dogStore.updateDog(updated)
-        } else {
-            let newDog = Dog(name: trimmedName, breed: displayBreed, photoData: newPhotoData)
-            dogStore.addDog(newDog)
-        }
-        if !isOnboarding {
-            dismiss()
+            if isOnboarding { onComplete?() }
+            else { dismiss() }
         }
     }
 }

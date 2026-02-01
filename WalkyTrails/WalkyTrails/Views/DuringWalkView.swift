@@ -14,10 +14,61 @@ struct DuringWalkView: View {
     @ObservedObject var settings: SettingsStore
     @ObservedObject var dogStore: DogProfileStore
     @ObservedObject var weatherService: WeatherService
-
-    @State private var selectedEventDogId: UUID?
+    /// When multiple dogs on walk, which dog we're logging for. Nil = single dog (use walk.dogIds.first).
+    @State private var selectedDogIdForLogging: UUID?
 
     private var currentWalk: Walk? { store.currentWalk }
+
+    @ViewBuilder
+    private var weatherRow: some View {
+        if weatherService.isLoading {
+            HStack(spacing: 8) {
+                ProgressView()
+                Text("Weather…")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Loading weather")
+        } else if let w = weatherService.currentWeather {
+            VStack(spacing: 6) {
+                HStack(spacing: 8) {
+                    Image(systemName: weatherIcon(for: w.weatherCode))
+                        .font(.title2)
+                        .foregroundStyle(.secondary)
+                    Text(settings.formattedTemperature(celsius: w.temperatureCelsius))
+                        .font(.title3)
+                        .fontWeight(.medium)
+                    Text(w.conditionDescription)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Weather: \(w.conditionDescription), \(settings.formattedTemperature(celsius: w.temperatureCelsius))")
+                if let suggestion = WeatherSuggestion.suggestion(for: w) {
+                    Text(suggestion)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .accessibilityLabel("Suggestion: \(suggestion)")
+                }
+            }
+        }
+    }
+
+    private func weatherIcon(for code: Int) -> String {
+        switch code {
+        case 0: return "sun.max.fill"
+        case 1, 2, 3: return "cloud.sun.fill"
+        case 45, 48: return "cloud.fog.fill"
+        case 51...67: return "cloud.drizzle.fill"
+        case 71...77: return "cloud.snow.fill"
+        case 80...82: return "cloud.rain.fill"
+        case 85, 86: return "cloud.snow.fill"
+        case 95...99: return "cloud.bolt.rain.fill"
+        default: return "cloud.fill"
+        }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -26,21 +77,36 @@ struct DuringWalkView: View {
                 walkControls(walk: walk)
             }
         }
-        .onChange(of: locationManager.distanceMeters) { _, newDistance in
-            store.updateCurrentWalkDistance(newDistance)
+        .onChange(of: currentWalk?.id) { _, _ in
+            if let walk = currentWalk, !walk.dogIds.isEmpty {
+                selectedDogIdForLogging = walk.dogIds.first
+            } else {
+                selectedDogIdForLogging = nil
+            }
         }
         .onAppear {
-            if let walk = currentWalk, selectedEventDogId == nil, let first = walk.dogIds.first {
-                selectedEventDogId = first
-            }
-            if let loc = locationManager.currentLocation {
-                weatherService.load(latitude: loc.coordinate.latitude, longitude: loc.coordinate.longitude, temperatureUnit: settings.temperatureUnitApi)
+            if let walk = currentWalk, selectedDogIdForLogging == nil, !walk.dogIds.isEmpty {
+                selectedDogIdForLogging = walk.dogIds.first
             }
 #if DEBUG
-            if settings.weatherDebugMode != .none, let snap = WeatherService.mockSnapshot(debugModeRaw: settings.weatherDebugMode.rawValueForStorage) {
-                weatherService.setOverride(snap)
+            if let mock = WeatherService.mockSnapshot(debugModeRaw: settings.weatherDebugMode.rawValue) {
+                weatherService.setOverride(mock)
+            } else if let coord = locationManager.currentLocation?.coordinate {
+                loadWeatherIfNeeded(coord: coord)
+            }
+#else
+            if let coord = locationManager.currentLocation?.coordinate {
+                loadWeatherIfNeeded(coord: coord)
             }
 #endif
+        }
+        .onChange(of: locationManager.currentLocation?.coordinate.latitude) { _, _ in
+            if let coord = locationManager.currentLocation?.coordinate {
+                loadWeatherIfNeeded(coord: coord)
+            }
+        }
+        .onChange(of: locationManager.distanceMeters) { _, newDistance in
+            store.updateCurrentWalkDistance(newDistance)
         }
     }
 
@@ -55,7 +121,7 @@ struct DuringWalkView: View {
             ForEach(walk.events.filter { $0.coordinate != nil }, id: \.id) { event in
                 if let coord = event.coordinate {
                     Annotation("", coordinate: CLLocationCoordinate2D(latitude: coord.latitude, longitude: coord.longitude)) {
-                        eventMarker(event: event)
+                        eventMarker(event: event, walk: walk)
                     }
                 }
             }
@@ -72,6 +138,7 @@ struct DuringWalkView: View {
     @ViewBuilder
     private func walkControls(walk: Walk) -> some View {
         VStack(spacing: 16) {
+            weatherRow
             Text("Walk in progress")
                 .font(.headline)
                 .foregroundStyle(.secondary)
@@ -90,47 +157,8 @@ struct DuringWalkView: View {
                     .accessibilityLabel("Distance walked")
                     .accessibilityValue(settings.formattedDistance(locationManager.distanceMeters))
             }
-            if let w = weatherService.currentWeather {
-                HStack(spacing: 8) {
-                    Image(systemName: "cloud.sun")
-                        .foregroundStyle(.secondary)
-                    Text(settings.formattedTemperature(celsius: w.temperatureCelsius) + " · " + w.conditionDescription)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("Weather: \(settings.formattedTemperature(celsius: w.temperatureCelsius)), \(w.conditionDescription)")
-                if let suggestion = weatherService.suggestion {
-                    Text(suggestion.message)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
             if walk.dogIds.count > 1 {
-                HStack(spacing: 8) {
-                    Text("Log event for:")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    ForEach(walk.dogIds, id: \.self) { id in
-                        if let dog = dogStore.dog(byId: id) {
-                            Button {
-                                selectedEventDogId = id
-                            } label: {
-                                Text(dog.name.isEmpty ? "Unnamed" : dog.name)
-                                    .font(.caption)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(selectedEventDogId == id ? Color.accentColor : Color.clear, in: RoundedRectangle(cornerRadius: 6))
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
+                currentDogBar(walk: walk)
             }
             eventButtons(walk: walk)
             Spacer(minLength: 8)
@@ -139,8 +167,30 @@ struct DuringWalkView: View {
         .padding()
     }
 
+    private func effectiveDogId(for walk: Walk) -> UUID? {
+        if walk.dogIds.count == 1 { return walk.dogIds.first }
+        return selectedDogIdForLogging
+    }
+
+    @ViewBuilder
+    private func currentDogBar(walk: Walk) -> some View {
+        Picker("Logging for", selection: $selectedDogIdForLogging) {
+            ForEach(walk.dogIds, id: \.self) { id in
+                Text(dogStore.dog(byId: id)?.name.isEmpty == false ? dogStore.dog(byId: id)!.name : "Unnamed")
+                    .tag(Optional(id))
+            }
+        }
+        .pickerStyle(.segmented)
+        .onAppear {
+            if selectedDogIdForLogging == nil || !walk.dogIds.contains(selectedDogIdForLogging!) {
+                selectedDogIdForLogging = walk.dogIds.first
+            }
+        }
+        .accessibilityLabel("Who you’re logging events for")
+    }
+
     private func eventButtons(walk: Walk) -> some View {
-        let dogId = walk.dogIds.count > 1 ? selectedEventDogId : walk.dogIds.first
+        let dogId = effectiveDogId(for: walk)
         return HStack(spacing: 12) {
             Button {
                 store.addEventToCurrentWalk(.pee, at: locationManager.currentLocation?.coordinate, dogId: dogId)
@@ -190,14 +240,21 @@ struct DuringWalkView: View {
     }
 
     @ViewBuilder
-    private func eventMarker(_ type: WalkEvent.EventType) -> some View {
-        Image(systemName: eventIcon(for: type))
-            .font(.title2)
-            .foregroundStyle(eventColor(for: type))
-            .padding(8)
-            .background(.background, in: Circle())
-            .shadow(radius: 2)
-            .accessibilityHidden(true) // Parent annotation has label
+    private func eventMarker(event: WalkEvent, walk: Walk) -> some View {
+        ZStack {
+            if walk.dogIds.count > 1, let dogId = (event.dogId ?? walk.dogIds.first), let ringColor = DogColors.color(for: dogId, in: walk.dogIds) {
+                Circle()
+                    .stroke(ringColor, lineWidth: 3)
+                    .frame(width: 44, height: 44)
+            }
+            Image(systemName: eventIcon(for: event.type))
+                .font(.title2)
+                .foregroundStyle(eventColor(for: event.type))
+                .padding(8)
+                .background(.background, in: Circle())
+                .shadow(radius: 2)
+        }
+        .accessibilityHidden(true)
     }
 
     private func eventIcon(for type: WalkEvent.EventType) -> String {
@@ -216,6 +273,17 @@ struct DuringWalkView: View {
         case .water: return .cyan
         case .play: return .orange
         }
+    }
+
+    private func loadWeatherIfNeeded(coord: CLLocationCoordinate2D) {
+#if DEBUG
+        if let mock = WeatherService.mockSnapshot(debugModeRaw: settings.weatherDebugMode.rawValue) {
+            weatherService.setOverride(mock)
+            return
+        }
+#endif
+        weatherService.clearOverride()
+        weatherService.load(latitude: coord.latitude, longitude: coord.longitude, temperatureUnit: settings.temperatureUnitApi)
     }
 
     private func formattedDuration(_ from: Date, now: Date = Date()) -> String {

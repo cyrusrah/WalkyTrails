@@ -19,6 +19,41 @@ enum DistanceUnit: String, Codable, CaseIterable {
     }
 }
 
+/// Temperature unit for weather display.
+enum TemperatureUnit: String, Codable, CaseIterable {
+    case celsius = "celsius"
+    case fahrenheit = "fahrenheit"
+
+    var displayName: String {
+        switch self {
+        case .celsius: return "Celsius (°C)"
+        case .fahrenheit: return "Fahrenheit (°F)"
+        }
+    }
+
+    /// Value for Open-Meteo API.
+    var apiValue: String { rawValue }
+}
+
+#if DEBUG
+/// Debug-only: simulate weather to test suggestions (Hot / Cold / Rain soon).
+enum WeatherDebugMode: String, Codable, CaseIterable {
+    case live = "live"
+    case simulateHot = "simulateHot"
+    case simulateCold = "simulateCold"
+    case simulateRain = "simulateRain"
+
+    var displayName: String {
+        switch self {
+        case .live: return "Live weather"
+        case .simulateHot: return "Simulate: Hot"
+        case .simulateCold: return "Simulate: Cold"
+        case .simulateRain: return "Simulate: Rain soon"
+        }
+    }
+}
+#endif
+
 /// Date display style for walk dates.
 enum DateStylePreference: String, Codable, CaseIterable {
     case short   // e.g. 1/31/26
@@ -41,42 +76,6 @@ enum DateStylePreference: String, Codable, CaseIterable {
         }
     }
 }
-
-/// Temperature unit for weather display.
-enum TemperatureUnit: String, Codable, CaseIterable {
-    case celsius
-    case fahrenheit
-
-    var displayName: String {
-        switch self {
-        case .celsius: return "Celsius"
-        case .fahrenheit: return "Fahrenheit"
-        }
-    }
-
-    var temperatureUnitApi: String { rawValue }
-}
-
-#if DEBUG
-/// DEBUG-only: simulate weather for testing suggestions.
-enum WeatherDebugMode: String, Codable, CaseIterable {
-    case none
-    case hot
-    case cold
-    case rain
-
-    var displayName: String {
-        switch self {
-        case .none: return "None"
-        case .hot: return "Simulate: Hot"
-        case .cold: return "Simulate: Cold"
-        case .rain: return "Simulate: Rain soon"
-        }
-    }
-
-    var rawValueForStorage: String { rawValue }
-}
-#endif
 
 /// Map style preference.
 enum MapStylePreference: String, Codable, CaseIterable {
@@ -105,15 +104,18 @@ enum MapStylePreference: String, Codable, CaseIterable {
 /// Persists app settings. Uses UserDefaults.
 final class SettingsStore: ObservableObject {
     static let distanceUnitKey = "walkyTrails.distanceUnit"
+    static let temperatureUnitKey = "walkyTrails.temperatureUnit"
     static let dateStyleKey = "walkyTrails.dateStyle"
     static let mapStyleKey = "walkyTrails.mapStyle"
-    static let temperatureUnitKey = "walkyTrails.temperatureUnit"
 #if DEBUG
-    static let weatherDebugKey = "walkyTrails.weatherDebug"
+    static let weatherDebugModeKey = "walkyTrails.weatherDebugMode"
 #endif
 
     @Published var distanceUnit: DistanceUnit {
         didSet { UserDefaults.standard.set(distanceUnit.rawValue, forKey: Self.distanceUnitKey) }
+    }
+    @Published var temperatureUnit: TemperatureUnit {
+        didSet { UserDefaults.standard.set(temperatureUnit.rawValue, forKey: Self.temperatureUnitKey) }
     }
     @Published var dateStyle: DateStylePreference {
         didSet { UserDefaults.standard.set(dateStyle.rawValue, forKey: Self.dateStyleKey) }
@@ -121,34 +123,21 @@ final class SettingsStore: ObservableObject {
     @Published var mapStylePreference: MapStylePreference {
         didSet { UserDefaults.standard.set(mapStylePreference.rawValue, forKey: Self.mapStyleKey) }
     }
-    @Published var temperatureUnit: TemperatureUnit {
-        didSet { UserDefaults.standard.set(temperatureUnit.rawValue, forKey: Self.temperatureUnitKey) }
-    }
 #if DEBUG
     @Published var weatherDebugMode: WeatherDebugMode {
-        didSet { UserDefaults.standard.set(weatherDebugMode.rawValue, forKey: Self.weatherDebugKey) }
+        didSet { UserDefaults.standard.set(weatherDebugMode.rawValue, forKey: Self.weatherDebugModeKey) }
     }
 #endif
 
     init() {
         self.distanceUnit = (UserDefaults.standard.string(forKey: Self.distanceUnitKey)).flatMap { DistanceUnit(rawValue: $0) } ?? .kilometers
+        self.temperatureUnit = (UserDefaults.standard.string(forKey: Self.temperatureUnitKey)).flatMap { TemperatureUnit(rawValue: $0) } ?? .celsius
         self.dateStyle = (UserDefaults.standard.string(forKey: Self.dateStyleKey)).flatMap { DateStylePreference(rawValue: $0) } ?? .medium
         self.mapStylePreference = (UserDefaults.standard.string(forKey: Self.mapStyleKey)).flatMap { MapStylePreference(rawValue: $0) } ?? .standard
-        self.temperatureUnit = (UserDefaults.standard.string(forKey: Self.temperatureUnitKey)).flatMap { TemperatureUnit(rawValue: $0) } ?? .celsius
 #if DEBUG
-        self.weatherDebugMode = (UserDefaults.standard.string(forKey: Self.weatherDebugKey)).flatMap { WeatherDebugMode(rawValue: $0) } ?? .none
+        self.weatherDebugMode = (UserDefaults.standard.string(forKey: Self.weatherDebugModeKey)).flatMap { WeatherDebugMode(rawValue: $0) } ?? .live
 #endif
     }
-
-    /// Formatted temperature (uses current unit).
-    func formattedTemperature(celsius: Double) -> String {
-        switch temperatureUnit {
-        case .celsius: return String(format: "%.0f°C", celsius)
-        case .fahrenheit: return String(format: "%.0f°F", celsius * 9/5 + 32)
-        }
-    }
-
-    var temperatureUnitApi: String { temperatureUnit.temperatureUnitApi }
 
     /// Formatted distance string for the given meters (uses current unit).
     func formattedDistance(_ meters: Double) -> String {
@@ -203,5 +192,21 @@ final class SettingsStore: ObservableObject {
     /// Formatted time string (time only).
     func formattedTime(_ date: Date) -> String {
         return timeFormatter.string(from: date)
+    }
+
+    /// Temperature unit string for weather API ("celsius" or "fahrenheit").
+    var temperatureUnitApi: String {
+        temperatureUnit.apiValue
+    }
+
+    /// Formatted temperature string (e.g. "22°C" or "72°F"). Input in Celsius.
+    func formattedTemperature(celsius: Double) -> String {
+        switch temperatureUnit {
+        case .celsius:
+            return String(format: "%.0f°C", celsius)
+        case .fahrenheit:
+            let f = celsius * 9 / 5 + 32
+            return String(format: "%.0f°F", f)
+        }
     }
 }

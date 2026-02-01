@@ -21,13 +21,9 @@ struct ContentView: View {
                 DuringWalkView(store: store, locationManager: locationManager, settings: settingsStore, dogStore: dogStore, weatherService: weatherService)
             } else if store.walkToSummarize != nil {
                 WalkSummaryView(store: store, settings: settingsStore, dogStore: dogStore, locationManager: locationManager, weatherService: weatherService)
-            } else if !userStore.user.hasContent {
+            } else if !userStore.hasCompletedOnboarding {
                 NavigationStack {
-                    UserProfileView(userStore: userStore, isOnboarding: true)
-                }
-            } else if !dogStore.hasAnyDog {
-                NavigationStack {
-                    DogProfileView(dogStore: dogStore, isOnboarding: true)
+                    OnboardingView(userStore: userStore, dogStore: dogStore)
                 }
             } else {
                 NavigationStack {

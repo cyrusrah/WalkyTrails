@@ -8,7 +8,7 @@
 - **Summary:** Walk summary header, notes field, Discard, Save.
 - **Walk detail:** Map, summary section, notes field (saved automatically). Events list uses default list behavior.
 - **History:** Each row has a combined label (date, duration, event count) and hint “Opens walk details.”
-- **Settings:** Pickers use their titles (Distance unit, Date format, Map style); Form sections are standard.
+- **Settings:** Pickers use their titles (Distance unit, Temperature, Date format, Map style); Form sections are standard.
 - **Dog profile:** Change photo, Remove photo, Dog’s name, Save, Delete profile (with hints).
 
 ### Dynamic Type

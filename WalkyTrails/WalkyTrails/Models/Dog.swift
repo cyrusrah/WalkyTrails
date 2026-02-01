@@ -6,9 +6,9 @@
 import Foundation
 import SwiftUI
 
-/// Single dog profile: name, optional breed, optional photo. Stored locally.
+/// Single dog profile: name, optional breed, optional photo. Belongs to the user; stored locally.
 struct Dog: Codable, Equatable, Identifiable {
-    var id: UUID
+    let id: UUID
     var name: String
     var breed: String
     /// JPEG data for profile photo; kept small for UserDefaults.
@@ -21,29 +21,22 @@ struct Dog: Codable, Equatable, Identifiable {
         self.photoData = photoData
     }
 
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
-        name = try c.decodeIfPresent(String.self, forKey: .name) ?? ""
-        breed = try c.decodeIfPresent(String.self, forKey: .breed) ?? ""
-        photoData = try c.decodeIfPresent(Data.self, forKey: .photoData)
-    }
-
     var hasContent: Bool {
         !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || !breed.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || photoData != nil
     }
-
-    private enum CodingKeys: String, CodingKey {
-        case id, name, breed, photoData
-    }
 }
 
-/// Stable colors for multi-dog walks (map rings, list dots).
+/// Shared visual language for multi-dog: stable color per dog (map markers, event lists).
 enum DogColors {
     private static let palette: [Color] = [
-        .blue, .orange, .green, .purple, .pink, .cyan, .indigo, .mint
+        Color(red: 0.25, green: 0.45, blue: 0.95),
+        Color(red: 0.95, green: 0.55, blue: 0.2),
+        Color(red: 0.2, green: 0.65, blue: 0.45),
+        Color(red: 0.6, green: 0.35, blue: 0.85),
+        Color(red: 0.2, green: 0.7, blue: 0.75),
+        Color(red: 0.9, green: 0.4, blue: 0.55),
     ]
 
     static func color(for dogId: UUID, in dogIds: [UUID]) -> Color? {

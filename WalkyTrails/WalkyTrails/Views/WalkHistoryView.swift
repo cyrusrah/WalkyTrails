@@ -9,8 +9,13 @@ struct WalkHistoryView: View {
     @ObservedObject var store: WalkStore
     @ObservedObject var settings: SettingsStore
     @ObservedObject var dogStore: DogProfileStore
-
+    @State private var selectedDogId: UUID?
     @State private var showDeleteAllConfirmation = false
+
+    private var filteredWalks: [Walk] {
+        guard let id = selectedDogId else { return store.walks }
+        return store.walks.filter { $0.dogIds.contains(id) }
+    }
 
     var body: some View {
         Group {
@@ -22,28 +27,42 @@ struct WalkHistoryView: View {
                 )
             } else {
                 List {
-                    ForEach(store.walks) { walk in
+                    if dogStore.dogs.count > 1 {
+                        Section {
+                            Picker("Filter by dog", selection: $selectedDogId) {
+                                Text("All dogs").tag(Optional<UUID>.none)
+                                ForEach(dogStore.dogs) { dog in
+                                    Text(dog.name.isEmpty ? "Unnamed" : dog.name).tag(Optional(dog.id))
+                                }
+                            }
+                            .pickerStyle(.menu)
+                        }
+                    }
+                    ForEach(filteredWalks) { walk in
                         NavigationLink {
                             WalkDetailView(store: store, settings: settings, dogStore: dogStore, walk: walk)
                         } label: {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(settings.formattedDate(walk.startTime))
-                                    .font(.headline)
-                                Text(formattedDuration(walk.durationSeconds))
-                                    .font(.subheadline)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(settings.formattedDate(walk.startTime))
+                                .font(.headline)
+                            Text(formattedDuration(walk.durationSeconds))
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                            if !walk.events.isEmpty {
+                                Text("\(walk.events.count) event(s)")
+                                    .font(.caption)
                                     .foregroundStyle(.secondary)
-                                if !walk.events.isEmpty {
-                                    Text("\(walk.events.count) event(s)")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
                             }
-                            .padding(.vertical, 4)
                         }
+                        .padding(.vertical, 4)
+                    }
                         .accessibilityLabel("Walk on \(settings.formattedDate(walk.startTime)), \(formattedDuration(walk.durationSeconds))\(walk.events.isEmpty ? "" : ", \(walk.events.count) events")")
                         .accessibilityHint("Opens walk details")
                     }
-                    .onDelete(perform: deleteWalks)
+                    .onDelete { indexSet in
+                        let ids = Set(indexSet.map { filteredWalks[$0].id })
+                        store.deleteWalks(ids: ids)
+                    }
                 }
                 .listStyle(.plain)
             }
@@ -53,29 +72,21 @@ struct WalkHistoryView: View {
         .toolbar {
             if !store.walks.isEmpty {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(role: .destructive) {
+                    Button("Delete all", role: .destructive) {
                         showDeleteAllConfirmation = true
-                    } label: {
-                        Text("Delete all")
                     }
-                    .accessibilityLabel("Delete all walks")
-                    .accessibilityHint("Removes all walk history after confirmation")
+                    .accessibilityLabel("Delete all walk history")
                 }
             }
         }
-        .confirmationDialog("Delete all walks?", isPresented: $showDeleteAllConfirmation, titleVisibility: .visible) {
+        .confirmationDialog("Delete all walk history?", isPresented: $showDeleteAllConfirmation, titleVisibility: .visible) {
             Button("Delete all", role: .destructive) {
                 store.deleteAllWalks()
             }
-            Button("Cancel", role: .cancel) {}
+            Button("Cancel", role: .cancel) { }
         } message: {
-            Text("This cannot be undone. All walk history will be removed.")
+            Text("This cannot be undone. All saved walks will be removed.")
         }
-    }
-
-    private func deleteWalks(at offsets: IndexSet) {
-        let ids = Set(offsets.map { store.walks[$0].id })
-        store.deleteWalks(ids: ids)
     }
 
     private func formattedDuration(_ seconds: TimeInterval) -> String {

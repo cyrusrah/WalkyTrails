@@ -19,11 +19,13 @@ final class DogProfileStore: ObservableObject {
     }
 
     private static func loadDogs() -> [Dog] {
+        // New format: array of dogs
         if let data = UserDefaults.standard.data(forKey: dogsKey),
            let decoded = try? JSONDecoder().decode([Dog].self, from: data),
            !decoded.isEmpty {
             return decoded
         }
+        // Migrate from legacy single dog (no id)
         if let data = UserDefaults.standard.data(forKey: dogKey) {
             struct LegacyDog: Codable {
                 var name: String
@@ -73,22 +75,15 @@ final class DogProfileStore: ObservableObject {
         persist()
     }
 
+    /// Convenience: first dog (for backward-compat UI during transition).
     var firstDog: Dog? { dogs.first }
+
+    /// Whether the user has at least one dog with content.
     var hasAnyDog: Bool { dogs.contains { $0.hasContent } }
 
+    /// Replaces all dogs (e.g. after restore from backup).
     func replaceDogs(with newDogs: [Dog]) {
         dogs = newDogs
         persist()
-    }
-
-    /// Legacy: single dog for backward compat during transition.
-    var dog: Dog {
-        get { dogs.first ?? Dog() }
-        set {
-            if dogs.isEmpty { dogs = [newValue] }
-            else if let idx = dogs.firstIndex(where: { $0.id == newValue.id }) { dogs[idx] = newValue }
-            else { dogs[0] = newValue }
-            persist()
-        }
     }
 }

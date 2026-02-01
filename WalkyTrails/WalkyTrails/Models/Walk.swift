@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import SwiftUI
 
 /// A coordinate for route or event location. Codable for persistence.
 struct Coordinate: Codable, Equatable {
@@ -79,6 +80,26 @@ struct WalkEvent: Codable, Identifiable {
         case poop
         case water
         case play
+
+        /// SF Symbol name for list and map markers.
+        var iconName: String {
+            switch self {
+            case .pee: return "drop.fill"
+            case .poop: return "leaf.fill"
+            case .water: return "cup.and.saucer.fill"
+            case .play: return "tennisball.fill"
+            }
+        }
+
+        /// Color for event icon and list.
+        var displayColor: Color {
+            switch self {
+            case .pee: return .blue
+            case .poop: return .brown
+            case .water: return .cyan
+            case .play: return .orange
+            }
+        }
     }
 }
 

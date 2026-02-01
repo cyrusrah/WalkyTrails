@@ -130,7 +130,7 @@ final class WalkStore: ObservableObject {
         currentWalk = walk
     }
 
-    /// Update the current walk's distance (from GPS). Call from LocationManager updates.
+    /// Update the current walk’s distance (from GPS). Call from LocationManager updates.
     func updateCurrentWalkDistance(_ meters: Double) {
         guard var walk = currentWalk else { return }
         walk.distanceMeters = meters
@@ -142,7 +142,7 @@ final class WalkStore: ObservableObject {
     private static let jsonDateEncoding: JSONEncoder.DateEncodingStrategy = .iso8601
     private static let jsonDateDecoding: JSONDecoder.DateDecodingStrategy = .iso8601
 
-    /// Full backup envelope: user profile, dogs, and walks. Use for JSON export.
+    /// Full backup envelope: user profile + dogs + walks. Use for JSON export.
     struct ExportEnvelope: Codable {
         let version: Int
         let exportedAt: Date

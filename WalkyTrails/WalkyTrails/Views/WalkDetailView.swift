@@ -12,10 +12,30 @@ struct WalkDetailView: View {
     @ObservedObject var settings: SettingsStore
     @ObservedObject var dogStore: DogProfileStore
     let walk: Walk
-    @Environment(\.dismiss) private var dismiss
     @State private var notesText: String = ""
     @State private var notesSaved = false
     @State private var showDeleteConfirmation = false
+
+    private var walkDogNames: String {
+        let names = walk.dogIds.compactMap { dogStore.dog(byId: $0)?.name }.filter { !$0.isEmpty }
+        return names.joined(separator: ", ")
+    }
+
+    /// Summary text for the Dogs row: names if we have them, else "N dog(s) (no longer in profile)" so history isn't lost.
+    private var dogsSummaryText: String {
+        let names = walk.dogIds.compactMap { dogStore.dog(byId: $0)?.name }.filter { !$0.isEmpty }
+        let missingCount = walk.dogIds.count - names.count
+        if !names.isEmpty {
+            let part = names.joined(separator: ", ")
+            if missingCount > 0 {
+                let suffix = missingCount == 1 ? "1 dog (no longer in profile)" : "\(missingCount) dogs (no longer in profile)"
+                return "\(part), \(suffix)"
+            }
+            return part
+        }
+        guard !walk.dogIds.isEmpty else { return "" }
+        return walk.dogIds.count == 1 ? "1 dog (no longer in profile)" : "\(walk.dogIds.count) dogs (no longer in profile)"
+    }
 
     private var routeCoords: [CLLocationCoordinate2D] {
         walk.routeForMap.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
@@ -41,7 +61,7 @@ struct WalkDetailView: View {
                         ForEach(walk.events.filter { $0.coordinate != nil }) { event in
                             if let coord = event.coordinate {
                                 Annotation("", coordinate: CLLocationCoordinate2D(latitude: coord.latitude, longitude: coord.longitude)) {
-                                    eventMarkerView(event: event)
+                                    eventMarker(event: event)
                                 }
                             }
                         }
@@ -55,19 +75,27 @@ struct WalkDetailView: View {
             }
 
             Section {
+                if let weather = walk.savedWeather {
+                    HStack(spacing: 8) {
+                        Image(systemName: weatherIcon(for: weather.weatherCode))
+                            .foregroundStyle(.secondary)
+                        Text(settings.formattedTemperature(celsius: weather.temperatureCelsius))
+                            .fontWeight(.medium)
+                        Text(weather.conditionDescription)
+                            .foregroundStyle(.secondary)
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Weather: \(weather.conditionDescription), \(settings.formattedTemperature(celsius: weather.temperatureCelsius))")
+                }
                 Label(formattedDuration(walk.durationSeconds), systemImage: "clock")
                 if walk.distanceMeters > 0 {
                     Label(settings.formattedDistance(walk.distanceMeters), systemImage: "location")
                 }
+                if !walk.dogIds.isEmpty {
+                    Label(dogsSummaryText, systemImage: "pawprint")
+                }
                 Text(settings.formattedDate(walk.startTime))
                 Text(settings.formattedTime(walk.startTime))
-                if !dogsSummaryText.isEmpty {
-                    Text(dogsSummaryText)
-                        .foregroundStyle(.secondary)
-                }
-                if let w = walk.savedWeather {
-                    Label(settings.formattedTemperature(celsius: w.temperatureCelsius) + " · " + w.conditionDescription, systemImage: "cloud.sun")
-                }
             } header: {
                 Text("Summary")
             }
@@ -90,17 +118,15 @@ struct WalkDetailView: View {
             if !walk.events.isEmpty {
                 Section {
                     ForEach(walk.events) { event in
-                        HStack {
+                        HStack(spacing: 10) {
+                            if walk.dogIds.count > 1, let dogId = event.dogId, let dogColor = DogColors.color(for: dogId, in: walk.dogIds) {
+                                Circle()
+                                    .fill(dogColor)
+                                    .frame(width: 8, height: 8)
+                            }
                             Image(systemName: eventIcon(for: event.type))
                                 .foregroundStyle(eventColor(for: event.type))
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(event.type.rawValue.capitalized)
-                                if let label = eventLabel(for: event) {
-                                    Text(label)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
+                            Text(eventLabel(for: event))
                             Spacer()
                             Text(settings.formattedTime(event.timestamp))
                                 .foregroundStyle(.secondary)
@@ -113,62 +139,7 @@ struct WalkDetailView: View {
         }
         .navigationTitle("Walk")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button(role: .destructive) {
-                    showDeleteConfirmation = true
-                } label: {
-                    Image(systemName: "trash")
-                }
-                .accessibilityLabel("Delete walk")
-                .accessibilityHint("Removes this walk from history after confirmation")
-            }
-        }
-        .confirmationDialog("Delete this walk?", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
-            Button("Delete", role: .destructive) {
-                store.deleteWalk(id: walk.id)
-                dismiss()
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This walk will be removed from history. This cannot be undone.")
-        }
         .onAppear { notesText = walk.notes ?? "" }
-    }
-
-    /// "Rex, Luna" or "2 dog(s) (no longer in profile)" or empty.
-    private var dogsSummaryText: String {
-        if walk.dogIds.isEmpty { return "" }
-        let names = walk.dogIds.compactMap { dogStore.dog(byId: $0)?.name }.filter { !$0.isEmpty }
-        if names.isEmpty {
-            return "\(walk.dogIds.count) dog(s) (no longer in profile)"
-        }
-        return names.joined(separator: ", ")
-    }
-
-    private func eventLabel(for event: WalkEvent) -> String? {
-        guard let id = event.dogId else { return nil }
-        if let dog = dogStore.dog(byId: id), !dog.name.isEmpty { return dog.name }
-        return "No longer in profile"
-    }
-
-    @ViewBuilder
-    private func eventMarkerView(event: WalkEvent) -> some View {
-        let ringColor = event.dogId.flatMap { DogColors.color(for: $0, in: walk.dogIds) }
-        ZStack {
-            if let color = ringColor {
-                Circle()
-                    .stroke(color, lineWidth: 3)
-                    .frame(width: 36, height: 36)
-            }
-            Image(systemName: eventIcon(for: event.type))
-                .font(.title2)
-                .foregroundStyle(eventColor(for: event.type))
-                .padding(8)
-                .background(.background, in: Circle())
-                .shadow(radius: 2)
-        }
-        .accessibilityHidden(true)
     }
 
     private func regionFitting(coordinates: [CLLocationCoordinate2D]) -> MKCoordinateRegion {
@@ -217,6 +188,44 @@ struct WalkDetailView: View {
         case .poop: return .brown
         case .water: return .cyan
         case .play: return .orange
+        }
+    }
+
+    @ViewBuilder
+    private func eventMarker(event: WalkEvent) -> some View {
+        Image(systemName: eventIcon(for: event.type))
+            .font(.title2)
+            .foregroundStyle(eventColor(for: event.type))
+            .padding(8)
+            .background(.background, in: Circle())
+            .shadow(radius: 2)
+            .overlay {
+                if walk.dogIds.count > 1, let dogId = event.dogId ?? walk.dogIds.first, let color = DogColors.color(for: dogId, in: walk.dogIds) {
+                    Circle()
+                        .stroke(color, lineWidth: 3)
+                        .padding(-4)
+                }
+            }
+    }
+
+    private func eventLabel(for event: WalkEvent) -> String {
+        let typeStr = event.type.rawValue.capitalized
+        guard let id = event.dogId else { return typeStr }
+        guard let name = dogStore.dog(byId: id)?.name, !name.isEmpty else { return "\(typeStr) (no longer in profile)" }
+        return "\(typeStr) (\(name))"
+    }
+
+    private func weatherIcon(for code: Int) -> String {
+        switch code {
+        case 0: return "sun.max.fill"
+        case 1, 2, 3: return "cloud.sun.fill"
+        case 45, 48: return "cloud.fog.fill"
+        case 51...67: return "cloud.drizzle.fill"
+        case 71...77: return "cloud.snow.fill"
+        case 80...82: return "cloud.rain.fill"
+        case 85, 86: return "cloud.snow.fill"
+        case 95...99: return "cloud.bolt.rain.fill"
+        default: return "cloud.fill"
         }
     }
 }

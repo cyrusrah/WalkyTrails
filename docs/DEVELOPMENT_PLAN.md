@@ -36,11 +36,11 @@
 - [x] Splash + custom launch screen (logo on white)
 - [x] Water / Play events (same flow as Pee/Poop; summary, detail, map)
 - [x] Walk notes (optional per walk; editable in summary and walk detail)
-- [x] Settings screen (units km/mi, date format, map style Standard/Hybrid/Satellite)
+- [x] Settings screen (distance km/mi, temperature °C/°F, date format, map style Standard/Hybrid/Satellite)
 - [x] Basic stats on Home (walks this week, distance this week, streak)
 - [x] Local-only (UserDefaults); no backend, no login
 - [x] README, CONTEXT, MAP_STRATEGY, LAUNCH_SCREEN, App Store–related docs
-- [x] Delete history: delete one walk (swipe in History or Delete in walk detail), multiple (swipe), or all (History toolbar "Delete all" with confirmation).
+- [x] Who's walking? sheet: selection stable (set on sheet open via `onChange`; no reset on tap)
 
 **Not done yet:** Accessibility (VoiceOver, Dynamic Type, Reduce Motion), Export/backup. **Later phases:** Multi-dog, route planning, turn-by-turn, weather, backend, auth, community, POIs, gamification.
 
@@ -102,9 +102,10 @@ Use these to implement and to know when an item is done. Check off steps with `[
 
 #### 1.5 Settings screen
 - **Steps:**
-  - [x] Add `SettingsStore` (UserDefaults): distance unit (km/mi), date format (short/medium/long), map style (standard/hybrid/imagery).
+  - [x] Add `SettingsStore` (UserDefaults): distance unit (km/mi), temperature unit (°C/°F), date format (short/medium/long), map style (standard/hybrid/imagery).
   - [x] Add `SettingsView` (Form + Pickers) and link from Home (e.g. gear in nav bar).
   - [x] Use settings for all distance formatting (during walk, summary, detail, Home stats).
+  - [x] Use temperature setting for weather display (during-walk and summary).
   - [x] Use settings for date/time formatting in history and walk detail.
   - [x] Apply map style preference in `DuringWalkView` and `WalkDetailView`.
 - **Exit:** Changing unit, date format, or map style in Settings updates all relevant screens; choices persist across launches.
@@ -124,15 +125,28 @@ Use these to implement and to know when an item is done. Check off steps with `[
 
 | # | Feature | Notes | Status |
 |---|---------|--------|--------|
-| 2.1 | Multi-dog | Multiple dog profiles; choose dog(s) per walk; history filtered by dog. | [ ] |
+| 2.1 | User profile + multi-dog | User profile (you: name, photo) in Settings; onboarding: your profile then first dog or skip. Multiple dogs; choose dog(s) per walk; history filtered by dog. Export/restore: user + dogs + walks. *Delete dog:* removed from profile only; past walks/events keep their `dogIds`; history still shows those walks; deleted dog's name no longer appears in labels; filter-by-dog only lists current dogs. | [x] |
 | 2.2 | Route planning (local) | "Plan a walk": set distance/duration or area; draw or pick waypoints; follow route during walk (no turn-by-turn yet). | [ ] |
 | 2.3 | Turn-by-turn (optional) | Directions along a planned route (MapKit directions or similar). | [ ] |
-| 2.4 | Weather | Current weather on during-walk and/or summary; optional "walk later" suggestion. | [ ] |
+| 2.4 | Weather & suggestions (simplified) | Current weather on during-walk/summary; simple rules: rain soon → suggest shorter walk, hot → caution. *Expand later:* AI wording, shaded routes. | [x] |
 | 2.5 | Walk types | Tag walks: regular, training, social, vet visit (filter in history). | [ ] |
 | 2.6 | Richer events | Optional: mood, short note, or photo per pee/poop/water/play. | [ ] |
 | 2.7 | Stats and trends | Weekly/monthly distance, events over time, simple charts. | [ ] |
 
 **Exit criteria:** Single-user app that feels "Strava-like" for dog walks (plan, record, review, stats), still local-first.
+
+#### 2.4 Weather & walk suggestions (simplified)
+
+- **Phase 2 scope (minimal):**
+  - [x] Show current weather (temp, conditions) on during-walk and summary via Open-Meteo API (no API key).
+  - [x] Simple rules only: "rain in &lt; 60 min" → "Rain soon — consider a shorter walk."; "feels like ≥ 32°C / 90°F" → "Hot — keep it short and shady."; "temp &lt; 0°C" → "Cold — keep it short and warm up after."
+  - [x] One line of copy per case (no AI); logic in-app (`WeatherSuggestion` in `WeatherService.swift`). Temperature unit (Celsius / Fahrenheit) is a separate setting in Settings → Units.
+  - [x] Weather at save time stored with the walk and shown in **History** (walk detail) when present.
+  - [x] **Testing suggestions:** In DEBUG builds, Settings → "Weather suggestions (testing)" lets you choose "Simulate: Hot", "Simulate: Cold", or "Simulate: Rain soon" to see the suggestion text on during-walk and summary without waiting for real weather.
+- **Expand later (no commitment in Phase 2):**
+  - **AI wording:** Use a model (cloud or on-device) to turn weather + context into natural suggestions.
+  - **Shaded routes:** After route planning exists, add "prefer shaded" when we have shade/sun data (e.g. crowdsourced tags or a provider that supports it).
+  - **Smarter suggestions:** Combine temp, humidity, UV, rain timing, time of day; optional use of walk history.
 
 ---
 

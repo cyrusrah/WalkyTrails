@@ -6,41 +6,33 @@
 import Foundation
 import SwiftUI
 
-/// User profile: name and optional photo. Stored locally.
-struct UserProfile: Codable, Equatable {
-    var name: String
-    var photoData: Data?
-
-    init(name: String = "", photoData: Data? = nil) {
-        self.name = name
-        self.photoData = photoData
-    }
-
-    var hasContent: Bool {
-        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || photoData != nil
-    }
-}
-
+/// Persists the user profile (you: name, photo) and onboarding state in UserDefaults.
 final class UserProfileStore: ObservableObject {
-    static let key = "walkyTrails.userProfile"
+    static let userProfileKey = "walkyTrails.userProfile"
+    static let onboardingCompletedKey = "walkyTrails.onboardingCompleted"
 
     @Published var user: UserProfile
+    @Published var hasCompletedOnboarding: Bool
 
     init() {
-        self.user = Self.load()
+        self.user = Self.loadUser()
+        let explicit = UserDefaults.standard.bool(forKey: Self.onboardingCompletedKey)
+        let hadLegacyDog = UserDefaults.standard.data(forKey: DogProfileStore.dogKey) != nil
+        let hasDogs = (UserDefaults.standard.data(forKey: DogProfileStore.dogsKey).flatMap { try? JSONDecoder().decode([Dog].self, from: $0) })?.isEmpty == false
+        self.hasCompletedOnboarding = explicit || hadLegacyDog || hasDogs
     }
 
-    private static func load() -> UserProfile {
-        guard let data = UserDefaults.standard.data(forKey: key) else { return UserProfile() }
+    private static func loadUser() -> UserProfile {
+        guard let data = UserDefaults.standard.data(forKey: userProfileKey) else { return UserProfile() }
         return (try? JSONDecoder().decode(UserProfile.self, from: data)) ?? UserProfile()
     }
 
     private func persist() {
         guard let data = try? JSONEncoder().encode(user) else { return }
-        UserDefaults.standard.set(data, forKey: Self.key)
+        UserDefaults.standard.set(data, forKey: Self.userProfileKey)
     }
 
-    func update(_ newUser: UserProfile) {
+    func save(_ newUser: UserProfile) {
         user = newUser
         persist()
     }
@@ -48,5 +40,10 @@ final class UserProfileStore: ObservableObject {
     func updatePhoto(_ imageData: Data?) {
         user.photoData = imageData
         persist()
+    }
+
+    func completeOnboarding() {
+        hasCompletedOnboarding = true
+        UserDefaults.standard.set(true, forKey: Self.onboardingCompletedKey)
     }
 }
