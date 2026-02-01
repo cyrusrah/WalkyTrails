@@ -23,10 +23,10 @@ WalkyTrails is an iOS app for logging dog walks: start a walk, track duration (a
 ## Core Features (v1)
 
 - Start / stop a walk.
-- Live duration (timer) while walking.
+- Live duration (timer) and **GPS distance** (CoreLocation) while walking.
 - Optional events: Pee, Poop (timestamp only for v1).
-- Post-walk summary with Save or Discard.
-- Walk history list; tap to open walk detail (duration, events).
+- Post-walk summary with duration, distance, and events; Save or Discard.
+- Walk history list; tap to open walk detail (duration, distance, events).
 - All data local (UserDefaults); no login, no backend.
 
 ## Out of Scope (v1)

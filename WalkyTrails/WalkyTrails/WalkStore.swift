@@ -3,6 +3,7 @@
 //  WalkyTrails
 //
 
+import CoreLocation
 import Foundation
 import SwiftUI
 
@@ -36,9 +37,11 @@ final class WalkStore: ObservableObject {
         currentWalk = Walk()
     }
 
-    func endWalk() {
+    /// End the current walk and store the route. Call with LocationManager.routeCoordinates.
+    func endWalk(withRoute route: [CLLocationCoordinate2D] = []) {
         guard var walk = currentWalk else { return }
-        walk.end()
+        let coords = route.map { Coordinate(latitude: $0.latitude, longitude: $0.longitude) }
+        walk.end(route: coords)
         currentWalk = nil
         walkToSummarize = walk
     }
@@ -54,13 +57,22 @@ final class WalkStore: ObservableObject {
         walkToSummarize = nil
     }
 
-    func addEventToCurrentWalk(_ type: WalkEvent.EventType) {
+    /// Add a pee/poop event; pass current location so it appears on the map.
+    func addEventToCurrentWalk(_ type: WalkEvent.EventType, at coordinate: CLLocationCoordinate2D? = nil) {
         guard var walk = currentWalk else { return }
-        walk.addEvent(type)
+        let coord: Coordinate? = coordinate.map { Coordinate(latitude: $0.latitude, longitude: $0.longitude) }
+        walk.addEvent(type, at: coord)
         currentWalk = walk
     }
 
     func updateCurrentWalk(_ walk: Walk) {
+        currentWalk = walk
+    }
+
+    /// Update the current walk’s distance (from GPS). Call from LocationManager updates.
+    func updateCurrentWalkDistance(_ meters: Double) {
+        guard var walk = currentWalk else { return }
+        walk.distanceMeters = meters
         currentWalk = walk
     }
 }
