@@ -40,6 +40,7 @@
 - [x] Basic stats on Home (walks this week, distance this week, streak)
 - [x] Local-only (UserDefaults); no backend, no login
 - [x] README, CONTEXT, MAP_STRATEGY, LAUNCH_SCREEN, App Store–related docs
+- [x] Delete history: delete one walk (swipe in History or Delete in walk detail), multiple (swipe), or all (History toolbar "Delete all" with confirmation).
 
 **Not done yet:** Accessibility (VoiceOver, Dynamic Type, Reduce Motion), Export/backup. **Later phases:** Multi-dog, route planning, turn-by-turn, weather, backend, auth, community, POIs, gamification.
 
