@@ -56,8 +56,8 @@ final class WalkStore: ObservableObject {
         UserDefaults.standard.set(data, forKey: Self.walksKey)
     }
 
-    func startWalk() {
-        currentWalk = Walk()
+    func startWalk(dogIds: [UUID] = []) {
+        currentWalk = Walk(dogIds: dogIds)
     }
 
     /// End the current walk and store the route. Call with LocationManager.routeCoordinates.
@@ -70,8 +70,10 @@ final class WalkStore: ObservableObject {
         walkToSummarize = walk
     }
 
-    func saveWalk() {
-        guard let walk = walkToSummarize else { return }
+    /// Saves the walk to history. Pass current weather to store with the walk for display in history.
+    func saveWalk(weather: SavedWeather? = nil) {
+        guard var walk = walkToSummarize else { return }
+        walk.savedWeather = weather
         walks.insert(walk, at: 0)
         persistWalks()
         walkToSummarize = nil
@@ -97,11 +99,30 @@ final class WalkStore: ObservableObject {
         persistWalks()
     }
 
-    /// Add a pee/poop event; pass current location so it appears on the map.
-    func addEventToCurrentWalk(_ type: WalkEvent.EventType, at coordinate: CLLocationCoordinate2D? = nil) {
+    /// Remove one saved walk from history.
+    func deleteWalk(id: UUID) {
+        walks.removeAll { $0.id == id }
+        persistWalks()
+    }
+
+    /// Remove multiple saved walks by id.
+    func deleteWalks(ids: Set<UUID>) {
+        walks.removeAll { ids.contains($0.id) }
+        persistWalks()
+    }
+
+    /// Remove all saved walks from history.
+    func deleteAllWalks() {
+        walks = []
+        persistWalks()
+    }
+
+    /// Add a pee/poop/water/play event; pass current location and optional dog (for multi-dog walks).
+    func addEventToCurrentWalk(_ type: WalkEvent.EventType, at coordinate: CLLocationCoordinate2D? = nil, dogId: UUID? = nil) {
         guard var walk = currentWalk else { return }
         let coord: Coordinate? = coordinate.map { Coordinate(latitude: $0.latitude, longitude: $0.longitude) }
-        walk.addEvent(type, at: coord)
+        let resolvedDogId = dogId ?? walk.dogIds.first
+        walk.addEvent(type, at: coord, dogId: resolvedDogId)
         currentWalk = walk
     }
 
@@ -109,7 +130,7 @@ final class WalkStore: ObservableObject {
         currentWalk = walk
     }
 
-    /// Update the current walk’s distance (from GPS). Call from LocationManager updates.
+    /// Update the current walk's distance (from GPS). Call from LocationManager updates.
     func updateCurrentWalkDistance(_ meters: Double) {
         guard var walk = currentWalk else { return }
         walk.distanceMeters = meters
@@ -121,21 +142,58 @@ final class WalkStore: ObservableObject {
     private static let jsonDateEncoding: JSONEncoder.DateEncodingStrategy = .iso8601
     private static let jsonDateDecoding: JSONDecoder.DateDecodingStrategy = .iso8601
 
-    /// Full backup envelope: dog profile (optional) + all walks. Use for JSON export.
+    /// Full backup envelope: user profile, dogs, and walks. Use for JSON export.
     struct ExportEnvelope: Codable {
         let version: Int
         let exportedAt: Date
-        var dog: Dog?
+        var user: UserProfile?
+        var dogs: [Dog]
         var walks: [Walk]
+
+        init(version: Int, exportedAt: Date, user: UserProfile?, dogs: [Dog], walks: [Walk]) {
+            self.version = version
+            self.exportedAt = exportedAt
+            self.user = user
+            self.dogs = dogs
+            self.walks = walks
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            version = try c.decode(Int.self, forKey: .version)
+            exportedAt = try c.decode(Date.self, forKey: .exportedAt)
+            user = try c.decodeIfPresent(UserProfile.self, forKey: .user)
+            if let decodedDogs = try? c.decode([Dog].self, forKey: .dogs), !decodedDogs.isEmpty {
+                dogs = decodedDogs
+            } else if let legacyDog = try? c.decode(Dog.self, forKey: .dog), legacyDog.hasContent {
+                dogs = [legacyDog]
+            } else {
+                dogs = []
+            }
+            walks = try c.decode([Walk].self, forKey: .walks)
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encode(version, forKey: .version)
+            try c.encode(exportedAt, forKey: .exportedAt)
+            try c.encodeIfPresent(user, forKey: .user)
+            try c.encode(dogs, forKey: .dogs)
+            try c.encode(walks, forKey: .walks)
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case version, exportedAt, user, dog, dogs, walks
+        }
     }
 
-    /// Encodes dog profile (if provided) and all walks as JSON (ISO8601 dates). Use for backup or share.
-    /// Pass the current dog so the export can be used for full restore later.
-    func exportAsJSONData(dog: Dog? = nil) -> Data? {
+    /// Encodes user profile, dogs, and walks as JSON (ISO8601 dates). Use for backup or share.
+    func exportAsJSONData(user: UserProfile? = nil, dogs: [Dog] = []) -> Data? {
         let envelope = ExportEnvelope(
-            version: 1,
+            version: 2,
             exportedAt: Date(),
-            dog: dog?.hasContent == true ? dog : nil,
+            user: user?.hasContent == true ? user : nil,
+            dogs: dogs,
             walks: walks
         )
         let encoder = JSONEncoder()

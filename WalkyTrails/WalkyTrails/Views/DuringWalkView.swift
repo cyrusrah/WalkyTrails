@@ -12,6 +12,10 @@ struct DuringWalkView: View {
     @ObservedObject var store: WalkStore
     @ObservedObject var locationManager: LocationManager
     @ObservedObject var settings: SettingsStore
+    @ObservedObject var dogStore: DogProfileStore
+    @ObservedObject var weatherService: WeatherService
+
+    @State private var selectedEventDogId: UUID?
 
     private var currentWalk: Walk? { store.currentWalk }
 
@@ -24,6 +28,19 @@ struct DuringWalkView: View {
         }
         .onChange(of: locationManager.distanceMeters) { _, newDistance in
             store.updateCurrentWalkDistance(newDistance)
+        }
+        .onAppear {
+            if let walk = currentWalk, selectedEventDogId == nil, let first = walk.dogIds.first {
+                selectedEventDogId = first
+            }
+            if let loc = locationManager.currentLocation {
+                weatherService.load(latitude: loc.coordinate.latitude, longitude: loc.coordinate.longitude, temperatureUnit: settings.temperatureUnitApi)
+            }
+#if DEBUG
+            if settings.weatherDebugMode != .none, let snap = WeatherService.mockSnapshot(debugModeRaw: settings.weatherDebugMode.rawValueForStorage) {
+                weatherService.setOverride(snap)
+            }
+#endif
         }
     }
 
@@ -38,7 +55,7 @@ struct DuringWalkView: View {
             ForEach(walk.events.filter { $0.coordinate != nil }, id: \.id) { event in
                 if let coord = event.coordinate {
                     Annotation("", coordinate: CLLocationCoordinate2D(latitude: coord.latitude, longitude: coord.longitude)) {
-                        eventMarker(event.type)
+                        eventMarker(event: event)
                     }
                 }
             }
@@ -73,38 +90,81 @@ struct DuringWalkView: View {
                     .accessibilityLabel("Distance walked")
                     .accessibilityValue(settings.formattedDistance(locationManager.distanceMeters))
             }
-            eventButtons
+            if let w = weatherService.currentWeather {
+                HStack(spacing: 8) {
+                    Image(systemName: "cloud.sun")
+                        .foregroundStyle(.secondary)
+                    Text(settings.formattedTemperature(celsius: w.temperatureCelsius) + " · " + w.conditionDescription)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Weather: \(settings.formattedTemperature(celsius: w.temperatureCelsius)), \(w.conditionDescription)")
+                if let suggestion = weatherService.suggestion {
+                    Text(suggestion.message)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            if walk.dogIds.count > 1 {
+                HStack(spacing: 8) {
+                    Text("Log event for:")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    ForEach(walk.dogIds, id: \.self) { id in
+                        if let dog = dogStore.dog(byId: id) {
+                            Button {
+                                selectedEventDogId = id
+                            } label: {
+                                Text(dog.name.isEmpty ? "Unnamed" : dog.name)
+                                    .font(.caption)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(selectedEventDogId == id ? Color.accentColor : Color.clear, in: RoundedRectangle(cornerRadius: 6))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+            eventButtons(walk: walk)
             Spacer(minLength: 8)
             endWalkButton
         }
         .padding()
     }
 
-    private var eventButtons: some View {
-        HStack(spacing: 12) {
+    private func eventButtons(walk: Walk) -> some View {
+        let dogId = walk.dogIds.count > 1 ? selectedEventDogId : walk.dogIds.first
+        return HStack(spacing: 12) {
             Button {
-                store.addEventToCurrentWalk(.pee, at: locationManager.currentLocation?.coordinate)
+                store.addEventToCurrentWalk(.pee, at: locationManager.currentLocation?.coordinate, dogId: dogId)
                 LogPeeIntent().donate()
             } label: { Label("Pee", systemImage: "drop") }
             .buttonStyle(.bordered)
             .accessibilityLabel("Log pee")
             .accessibilityHint("Records a pee event at current location")
             Button {
-                store.addEventToCurrentWalk(.poop, at: locationManager.currentLocation?.coordinate)
+                store.addEventToCurrentWalk(.poop, at: locationManager.currentLocation?.coordinate, dogId: dogId)
                 LogPoopIntent().donate()
             } label: { Label("Poop", systemImage: "leaf") }
             .buttonStyle(.bordered)
             .accessibilityLabel("Log poop")
             .accessibilityHint("Records a poop event at current location")
             Button {
-                store.addEventToCurrentWalk(.water, at: locationManager.currentLocation?.coordinate)
+                store.addEventToCurrentWalk(.water, at: locationManager.currentLocation?.coordinate, dogId: dogId)
                 LogWaterIntent().donate()
             } label: { Label("Water", systemImage: "cup.and.saucer") }
             .buttonStyle(.bordered)
             .accessibilityLabel("Log water")
             .accessibilityHint("Records a water break at current location")
             Button {
-                store.addEventToCurrentWalk(.play, at: locationManager.currentLocation?.coordinate)
+                store.addEventToCurrentWalk(.play, at: locationManager.currentLocation?.coordinate, dogId: dogId)
                 LogPlayIntent().donate()
             } label: { Label("Play", systemImage: "tennisball") }
             .buttonStyle(.bordered)
@@ -171,5 +231,5 @@ struct DuringWalkView: View {
         let s = WalkStore()
         s.startWalk()
         return s
-    }(), locationManager: LocationManager(), settings: SettingsStore())
+    }(), locationManager: LocationManager(), settings: SettingsStore(), dogStore: DogProfileStore(), weatherService: WeatherService())
 }

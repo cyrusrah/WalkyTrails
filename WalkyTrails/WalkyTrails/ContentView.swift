@@ -10,22 +10,28 @@ import SwiftUI
 struct ContentView: View {
     @ObservedObject var store: WalkStore
     @ObservedObject var locationManager: LocationManager
+    @ObservedObject var userStore: UserProfileStore
     @ObservedObject var dogStore: DogProfileStore
     @ObservedObject var settingsStore: SettingsStore
+    @ObservedObject var weatherService: WeatherService
 
     var body: some View {
         Group {
             if store.currentWalk != nil {
-                DuringWalkView(store: store, locationManager: locationManager, settings: settingsStore)
+                DuringWalkView(store: store, locationManager: locationManager, settings: settingsStore, dogStore: dogStore, weatherService: weatherService)
             } else if store.walkToSummarize != nil {
-                WalkSummaryView(store: store, settings: settingsStore)
-            } else if !dogStore.dog.hasContent {
+                WalkSummaryView(store: store, settings: settingsStore, dogStore: dogStore, locationManager: locationManager, weatherService: weatherService)
+            } else if !userStore.user.hasContent {
+                NavigationStack {
+                    UserProfileView(userStore: userStore, isOnboarding: true)
+                }
+            } else if !dogStore.hasAnyDog {
                 NavigationStack {
                     DogProfileView(dogStore: dogStore, isOnboarding: true)
                 }
             } else {
                 NavigationStack {
-                    HomeView(store: store, dogStore: dogStore, settings: settingsStore)
+                    HomeView(store: store, userStore: userStore, dogStore: dogStore, settings: settingsStore)
                 }
             }
         }
@@ -41,5 +47,5 @@ struct ContentView: View {
 }
 
 #Preview {
-    ContentView(store: WalkStore(), locationManager: LocationManager(), dogStore: DogProfileStore(), settingsStore: SettingsStore())
+    ContentView(store: WalkStore(), locationManager: LocationManager(), userStore: UserProfileStore(), dogStore: DogProfileStore(), settingsStore: SettingsStore(), weatherService: WeatherService())
 }

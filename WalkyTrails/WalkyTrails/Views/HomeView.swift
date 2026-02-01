@@ -8,17 +8,23 @@ import UIKit
 
 struct HomeView: View {
     @ObservedObject var store: WalkStore
+    @ObservedObject var userStore: UserProfileStore
     @ObservedObject var dogStore: DogProfileStore
     @ObservedObject var settings: SettingsStore
-    @State private var showHistory = false
+    @State private var showStartWalkSheet = false
+    @State private var selectedDogIds: Set<UUID> = []
 
     private var greeting: String {
-        let name = dogStore.dog.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        if name.isEmpty { return "Log your walks, one step at a time." }
-        return "Ready to walk, \(name)?"
+        let userName = userStore.user.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !userName.isEmpty { return "Ready to walk, \(userName)?" }
+        if let first = dogStore.dogs.first, !first.name.isEmpty {
+            return "Ready to walk, \(first.name)?"
+        }
+        return "Log your walks, one step at a time."
     }
 
-    private var hasProfile: Bool { dogStore.dog.hasContent }
+    private var hasUserPhoto: Bool { userStore.user.photoData != nil }
+    private var hasAnyDog: Bool { dogStore.hasAnyDog }
 
     private var walksThisWeek: [Walk] {
         let cal = Calendar.current
@@ -91,7 +97,12 @@ struct HomeView: View {
             }
             Spacer()
             Button {
-                store.startWalk()
+                if dogStore.dogs.count == 1 {
+                    store.startWalk(dogIds: [dogStore.dogs[0].id])
+                } else {
+                    selectedDogIds = Set(dogStore.dogs.map(\.id))
+                    showStartWalkSheet = true
+                }
             } label: {
                 Label("Start Walk", systemImage: "figure.walk")
                     .font(.title2)
@@ -102,8 +113,14 @@ struct HomeView: View {
             .padding(.horizontal, 24)
             .accessibilityLabel("Start walk")
             .accessibilityHint("Begins tracking a new walk with timer and GPS")
+            .sheet(isPresented: $showStartWalkSheet) {
+                startWalkSheet
+            }
+            .onChange(of: showStartWalkSheet) { _, isShowing in
+                if isShowing { selectedDogIds = Set(dogStore.dogs.map(\.id)) }
+            }
             NavigationLink {
-                WalkHistoryView(store: store, settings: settings)
+                WalkHistoryView(store: store, settings: settings, dogStore: dogStore)
             } label: {
                 Label("History", systemImage: "clock.arrow.circlepath")
                     .font(.body)
@@ -120,18 +137,18 @@ struct HomeView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
-                if hasProfile {
-                    NavigationLink {
-                        DogProfileView(dogStore: dogStore, isOnboarding: false)
-                    } label: {
-                        profileCircle
-                    }
-                    .buttonStyle(.plain)
+                NavigationLink {
+                    UserProfileView(userStore: userStore, isOnboarding: false)
+                } label: {
+                    profileCircle
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Your profile")
+                .accessibilityHint("Opens your name and photo")
             }
             ToolbarItem(placement: .topBarTrailing) {
                 NavigationLink {
-                    SettingsView(settings: settings, store: store, dogStore: dogStore)
+                    SettingsView(settings: settings, store: store, userStore: userStore, dogStore: dogStore)
                 } label: {
                     Image(systemName: "gearshape")
                 }
@@ -143,21 +160,93 @@ struct HomeView: View {
 
     private var profileCircle: some View {
         Group {
-            if let data = dogStore.dog.photoData, let uiImage = UIImage(data: data) {
+            if let data = userStore.user.photoData, let uiImage = UIImage(data: data) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 32, height: 32)
+                    .clipShape(Circle())
+            } else if let data = dogStore.firstDog?.photoData, let uiImage = UIImage(data: data) {
                 Image(uiImage: uiImage)
                     .resizable()
                     .scaledToFill()
                     .frame(width: 32, height: 32)
                     .clipShape(Circle())
             } else {
-                Image(systemName: "pawprint.circle.fill")
+                Image(systemName: "person.circle.fill")
                     .font(.system(size: 32))
                     .foregroundStyle(.secondary)
             }
         }
     }
+
+    @ViewBuilder
+    private var startWalkSheet: some View {
+        NavigationStack {
+            List {
+                if dogStore.dogs.isEmpty {
+                    Section {
+                        Text("Add a dog to track who's on the walk.")
+                            .foregroundStyle(.secondary)
+                        NavigationLink {
+                            DogProfileView(dogStore: dogStore, initialDog: nil, isOnboarding: false)
+                        } label: {
+                            Label("Add dog", systemImage: "plus.circle.fill")
+                        }
+                    }
+                } else {
+                    Section {
+                        ForEach(dogStore.dogs) { dog in
+                            Button {
+                                if selectedDogIds.contains(dog.id) {
+                                    selectedDogIds.remove(dog.id)
+                                } else {
+                                    selectedDogIds.insert(dog.id)
+                                }
+                            } label: {
+                                HStack {
+                                    Text(dog.name.isEmpty ? "Unnamed" : dog.name)
+                                    Spacer()
+                                    if selectedDogIds.contains(dog.id) {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundStyle(Color.accentColor)
+                                    }
+                                }
+                            }
+                        }
+                    } footer: {
+                        Text("Tap to select. All selected by default.")
+                    }
+                }
+            }
+            .navigationTitle("Who's walking?")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { showStartWalkSheet = false }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    if dogStore.dogs.isEmpty {
+                        NavigationLink {
+                            DogProfileView(dogStore: dogStore, initialDog: nil, isOnboarding: false)
+                        } label: {
+                            Text("Add dog")
+                        }
+                        .fontWeight(.semibold)
+                    } else {
+                        Button("Start") {
+                            store.startWalk(dogIds: Array(selectedDogIds))
+                            showStartWalkSheet = false
+                        }
+                        .disabled(selectedDogIds.isEmpty)
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium])
+    }
 }
 
 #Preview {
-    HomeView(store: WalkStore(), dogStore: DogProfileStore(), settings: SettingsStore())
+    HomeView(store: WalkStore(), userStore: UserProfileStore(), dogStore: DogProfileStore(), settings: SettingsStore())
 }

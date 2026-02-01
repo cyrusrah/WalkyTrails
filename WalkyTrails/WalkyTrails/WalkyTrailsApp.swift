@@ -12,8 +12,10 @@ struct WalkyTrailsApp: App {
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var store = WalkStore()
     @StateObject private var locationManager = LocationManager()
+    @StateObject private var userStore = UserProfileStore()
     @StateObject private var dogStore = DogProfileStore()
     @StateObject private var settingsStore = SettingsStore()
+    @StateObject private var weatherService = WeatherService()
     @State private var showSplash = true
 
     var body: some Scene {
@@ -29,7 +31,7 @@ struct WalkyTrailsApp: App {
                             }
                         }
                 } else {
-                    ContentView(store: store, locationManager: locationManager, dogStore: dogStore, settingsStore: settingsStore)
+                    ContentView(store: store, locationManager: locationManager, userStore: userStore, dogStore: dogStore, settingsStore: settingsStore, weatherService: weatherService)
                 }
             }
             .onChange(of: scenePhase) { _, newPhase in

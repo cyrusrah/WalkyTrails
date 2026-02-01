@@ -37,6 +37,8 @@ private let commonBreeds = [
 
 struct DogProfileView: View {
     @ObservedObject var dogStore: DogProfileStore
+    /// When nil, adding a new dog; when non-nil, editing that dog.
+    var initialDog: Dog? = nil
     /// When true, shown as first-run onboarding (no back button); after save, app shows Home.
     var isOnboarding: Bool = false
     @Environment(\.dismiss) private var dismiss
@@ -44,7 +46,11 @@ struct DogProfileView: View {
     @State private var selectedBreed: String = ""
     @State private var customBreed: String = ""
     @State private var selectedItem: PhotosPickerItem?
+    @State private var newPhotoData: Data?
     @State private var showDeleteConfirmation = false
+
+    private var isEditing: Bool { initialDog != nil }
+    private var currentDog: Dog? { initialDog ?? dogStore.firstDog }
 
     private let photoSize: CGFloat = 100
     private let jpegQuality: CGFloat = 0.7
@@ -85,9 +91,13 @@ struct DogProfileView: View {
                 }
                 .accessibilityLabel("Change dog photo")
                 .accessibilityHint("Pick a photo from your library")
-                if dogStore.dog.photoData != nil {
+                if photoDataForDisplay != nil {
                     Button(role: .destructive) {
-                        dogStore.updatePhoto(nil)
+                        if let id = currentDog?.id {
+                            dogStore.updatePhoto(forDogId: id, imageData: nil)
+                        } else {
+                            newPhotoData = nil
+                        }
                     } label: {
                         Label("Remove Photo", systemImage: "trash")
                     }
@@ -114,7 +124,7 @@ struct DogProfileView: View {
                 Text("Details")
             }
 
-            if !isOnboarding {
+            if !isOnboarding && isEditing {
                 Section {
                     Button(role: .destructive) {
                         showDeleteConfirmation = true
@@ -162,7 +172,7 @@ struct DogProfileView: View {
 
     @ViewBuilder
     private var photoView: some View {
-        if let data = dogStore.dog.photoData, let uiImage = UIImage(data: data) {
+        if let data = photoDataForDisplay, let uiImage = UIImage(data: data) {
             Image(uiImage: uiImage)
                 .resizable()
                 .scaledToFill()
@@ -182,16 +192,24 @@ struct DogProfileView: View {
         guard let uiImage = UIImage(data: data) else { return }
         let jpeg = uiImage.jpegData(compressionQuality: jpegQuality)
         await MainActor.run {
-            dogStore.updatePhoto(jpeg)
+            if let id = currentDog?.id {
+                dogStore.updatePhoto(forDogId: id, imageData: jpeg)
+            } else {
+                newPhotoData = jpeg
+            }
         }
     }
 
     private func saveAndDismissIfNeeded() {
-        dogStore.save(Dog(
-            name: name.trimmingCharacters(in: .whitespacesAndNewlines),
-            breed: displayBreed,
-            photoData: dogStore.dog.photoData
-        ))
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let photo = isEditing ? currentDog?.photoData : newPhotoData
+        if let existing = initialDog {
+            let updated = Dog(id: existing.id, name: trimmedName, breed: displayBreed, photoData: photo ?? existing.photoData)
+            dogStore.updateDog(updated)
+        } else {
+            let newDog = Dog(name: trimmedName, breed: displayBreed, photoData: newPhotoData)
+            dogStore.addDog(newDog)
+        }
         if !isOnboarding {
             dismiss()
         }
@@ -200,6 +218,6 @@ struct DogProfileView: View {
 
 #Preview {
     NavigationStack {
-        DogProfileView(dogStore: DogProfileStore())
+        DogProfileView(dogStore: DogProfileStore(), initialDog: nil)
     }
 }

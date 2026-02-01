@@ -6,41 +6,89 @@
 import Foundation
 import SwiftUI
 
-/// Persists the single dog profile (name, breed, photo) in UserDefaults.
+/// Persists multiple dogs (belonging to the user) in UserDefaults.
+/// Migrates from legacy single-dog key to dogs array on first load.
 final class DogProfileStore: ObservableObject {
     static let dogKey = "walkyTrails.dogProfile"
+    static let dogsKey = "walkyTrails.dogs"
 
-    @Published var dog: Dog
+    @Published var dogs: [Dog]
 
     init() {
-        self.dog = Self.loadDog()
+        self.dogs = Self.loadDogs()
     }
 
-    private static func loadDog() -> Dog {
-        guard let data = UserDefaults.standard.data(forKey: dogKey) else { return Dog() }
-        let decoder = JSONDecoder()
-        return (try? decoder.decode(Dog.self, from: data)) ?? Dog()
+    private static func loadDogs() -> [Dog] {
+        if let data = UserDefaults.standard.data(forKey: dogsKey),
+           let decoded = try? JSONDecoder().decode([Dog].self, from: data),
+           !decoded.isEmpty {
+            return decoded
+        }
+        if let data = UserDefaults.standard.data(forKey: dogKey) {
+            struct LegacyDog: Codable {
+                var name: String
+                var breed: String
+                var photoData: Data?
+            }
+            if let legacy = try? JSONDecoder().decode(LegacyDog.self, from: data),
+               legacy.name.isEmpty == false || legacy.breed.isEmpty == false || legacy.photoData != nil {
+                let dog = Dog(name: legacy.name, breed: legacy.breed, photoData: legacy.photoData)
+                UserDefaults.standard.removeObject(forKey: dogKey)
+                let encoded = (try? JSONEncoder().encode([dog])) ?? Data()
+                UserDefaults.standard.set(encoded, forKey: dogsKey)
+                return [dog]
+            }
+        }
+        return []
     }
 
     private func persist() {
-        let encoder = JSONEncoder()
-        guard let data = try? encoder.encode(dog) else { return }
-        UserDefaults.standard.set(data, forKey: Self.dogKey)
+        guard let data = try? JSONEncoder().encode(dogs) else { return }
+        UserDefaults.standard.set(data, forKey: Self.dogsKey)
     }
 
-    func save(_ newDog: Dog) {
-        dog = newDog
+    func dog(byId id: UUID) -> Dog? {
+        dogs.first { $0.id == id }
+    }
+
+    func addDog(_ dog: Dog) {
+        dogs.append(dog)
         persist()
     }
 
-    func updatePhoto(_ imageData: Data?) {
-        dog.photoData = imageData
+    func updateDog(_ dog: Dog) {
+        guard let idx = dogs.firstIndex(where: { $0.id == dog.id }) else { return }
+        dogs[idx] = dog
         persist()
     }
 
-    /// Clears the profile; app will show onboarding again when appropriate.
-    func clearProfile() {
-        dog = Dog()
+    func deleteDog(id: UUID) {
+        dogs.removeAll { $0.id == id }
         persist()
+    }
+
+    func updatePhoto(forDogId id: UUID, imageData: Data?) {
+        guard let idx = dogs.firstIndex(where: { $0.id == id }) else { return }
+        dogs[idx].photoData = imageData
+        persist()
+    }
+
+    var firstDog: Dog? { dogs.first }
+    var hasAnyDog: Bool { dogs.contains { $0.hasContent } }
+
+    func replaceDogs(with newDogs: [Dog]) {
+        dogs = newDogs
+        persist()
+    }
+
+    /// Legacy: single dog for backward compat during transition.
+    var dog: Dog {
+        get { dogs.first ?? Dog() }
+        set {
+            if dogs.isEmpty { dogs = [newValue] }
+            else if let idx = dogs.firstIndex(where: { $0.id == newValue.id }) { dogs[idx] = newValue }
+            else { dogs[0] = newValue }
+            persist()
+        }
     }
 }

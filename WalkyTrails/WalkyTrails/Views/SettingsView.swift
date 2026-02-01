@@ -16,6 +16,7 @@ private struct ShareableExport: Identifiable {
 struct SettingsView: View {
     @ObservedObject var settings: SettingsStore
     @ObservedObject var store: WalkStore
+    @ObservedObject var userStore: UserProfileStore
     @ObservedObject var dogStore: DogProfileStore
 
     @State private var shareableExport: ShareableExport?
@@ -121,10 +122,9 @@ struct SettingsView: View {
             }
         } message: {
             if let envelope = pendingRestore {
-                let dogLine = (envelope.dog?.hasContent == true)
-                    ? ", dog profile (\(envelope.dog?.name ?? ""))"
-                    : ""
-                Text("This will replace your current walk history and dog profile with the backup: \(envelope.walks.count) walk(s)\(dogLine). This cannot be undone.")
+                let extra = [envelope.user?.hasContent == true ? "user profile" : nil, envelope.dogs.isEmpty ? nil : "\(envelope.dogs.count) dog(s)"].compactMap { $0 }
+                let extraLine = extra.isEmpty ? "" : ", " + extra.joined(separator: ", ")
+                Text("This will replace your current data with the backup: \(envelope.walks.count) walk(s)\(extraLine). This cannot be undone.")
             }
         }
         .alert("Restore failed", isPresented: $showRestoreError) {
@@ -135,13 +135,13 @@ struct SettingsView: View {
         .alert("Restore complete", isPresented: $showRestoreSuccess) {
             Button("OK") { showRestoreSuccess = false }
         } message: {
-            Text("Walk history and dog profile have been restored from the backup.")
+            Text("Walk history, user profile, and dog profiles have been restored from the backup.")
         }
     }
 
     private func exportAsJSON(store: WalkStore) {
-        let dog = dogStore.dog.hasContent ? dogStore.dog : nil
-        guard let data = store.exportAsJSONData(dog: dog) else {
+        let user = userStore.user.hasContent ? userStore.user : nil
+        guard let data = store.exportAsJSONData(user: user, dogs: dogStore.dogs) else {
             exportError = "Could not encode walk data."
             showExportError = true
             return
@@ -214,8 +214,11 @@ struct SettingsView: View {
     private func applyRestore() {
         guard let envelope = pendingRestore else { return }
         store.replaceWalks(with: envelope.walks)
-        if let dog = envelope.dog, dog.hasContent {
-            dogStore.save(dog)
+        if let user = envelope.user, user.hasContent {
+            userStore.update(user)
+        }
+        if !envelope.dogs.isEmpty {
+            dogStore.replaceDogs(with: envelope.dogs)
         }
         pendingRestore = nil
         showRestoreSuccess = true
@@ -224,6 +227,6 @@ struct SettingsView: View {
 
 #Preview {
     NavigationStack {
-        SettingsView(settings: SettingsStore(), store: WalkStore(), dogStore: DogProfileStore())
+        SettingsView(settings: SettingsStore(), store: WalkStore(), userStore: UserProfileStore(), dogStore: DogProfileStore())
     }
 }
