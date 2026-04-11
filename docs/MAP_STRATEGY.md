@@ -81,6 +81,12 @@ So TailTrails was “Mapbox + React Native.” WalkyTrails is **native Swift/Swi
 
 Next step: implement the data changes (route + event coordinates) and then the MapKit UI (during-walk map + walk-detail map).
 
+### Route planning (Phase 2.2) — chosen approach
+
+- **MVP B:** User drops **waypoints** in order; the app requests **walking directions** between each consecutive pair via **`MKDirections`** and **stitches** the returned polylines into one planned route. Matches real sidewalks/trails better than straight-line segments.
+- **During walk:** Show planned polyline alongside the **recorded** GPS path; **no** turn-by-turn or voice in this phase.
+- **Fallback:** If a leg fails (network, no route), use a **straight segment** for that leg only.
+
 ---
 
 ## Visualizing walks in history

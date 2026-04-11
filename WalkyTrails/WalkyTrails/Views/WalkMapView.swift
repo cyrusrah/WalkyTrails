@@ -10,7 +10,10 @@ import MapKit
 import SwiftUI
 
 struct WalkMapView: View {
+    /// Recorded GPS path (solid tint line).
     let routeCoordinates: [CLLocationCoordinate2D]
+    /// Planned walking route from MapKit directions (dashed secondary line); drawn under the recorded path.
+    var plannedRouteCoordinates: [CLLocationCoordinate2D] = []
     let events: [WalkEvent]
     let dogIds: [UUID]
     let mapStyle: MapStyle
@@ -21,14 +24,22 @@ struct WalkMapView: View {
     private var initialPosition: MapCameraPosition {
         if showUserLocation { return .userLocation(fallback: .automatic) }
         if let pos = cameraPosition { return pos }
-        if routeCoordinates.isEmpty { return .automatic }
-        return .region(Self.regionFitting(coordinates: routeCoordinates))
+        let combined = routeCoordinates + plannedRouteCoordinates
+        if combined.isEmpty { return .automatic }
+        return .region(Self.regionFitting(coordinates: combined))
     }
 
     var body: some View {
         Map(initialPosition: initialPosition) {
             if showUserLocation {
                 UserAnnotation()
+            }
+            if !plannedRouteCoordinates.isEmpty {
+                MapPolyline(coordinates: plannedRouteCoordinates)
+                    .stroke(
+                        .secondary,
+                        style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round, dash: [8, 5])
+                    )
             }
             if !routeCoordinates.isEmpty {
                 MapPolyline(coordinates: routeCoordinates)

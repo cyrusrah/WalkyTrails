@@ -1,5 +1,10 @@
 # WalkyTrails – Project Context
 
+## Canonical path
+
+- **Use "Documents" (plural):** `/Users/cyrusrahgoshay/Documents/Dev/walkyTrails/`
+- Do not use `Document` (singular); the real project and git repo live under **Documents**. (See also `.cursor/rules/project-paths.mdc` for Cursor/AI.)
+
 ## Overview
 
 WalkyTrails is an iOS app for logging dog walks: start a walk, track duration (and optional events like pee/poop), end the walk, see a summary, and save it to history. All data is stored locally on device (no backend for v1). Built with **Swift** and **SwiftUI**, same publishing flow as FlashRead.

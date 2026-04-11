@@ -56,8 +56,8 @@ final class WalkStore: ObservableObject {
         UserDefaults.standard.set(data, forKey: Self.walksKey)
     }
 
-    func startWalk(dogIds: [UUID] = []) {
-        currentWalk = Walk(dogIds: dogIds)
+    func startWalk(dogIds: [UUID] = [], plannedRouteCoordinates: [Coordinate]? = nil) {
+        currentWalk = Walk(plannedRouteCoordinates: plannedRouteCoordinates, dogIds: dogIds)
     }
 
     /// End the current walk and store the route. Call with LocationManager.routeCoordinates.

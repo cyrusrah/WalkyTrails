@@ -84,6 +84,9 @@ struct DuringWalkView: View {
     private func walkMap(walk: Walk) -> some View {
         WalkMapView(
             routeCoordinates: locationManager.routeCoordinates,
+            plannedRouteCoordinates: walk.plannedRouteForMap.map {
+                CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude)
+            },
             events: walk.events,
             dogIds: walk.dogIds,
             mapStyle: settings.mapStylePreference.mapStyle,

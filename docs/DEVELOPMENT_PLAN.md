@@ -26,23 +26,36 @@
 
 ---
 
-## Current state (as of this plan)
+## Current state (code vs plan — update this when you ship)
 
-**Done:**
+**This section is the quick “where we are” summary.** Detailed checkboxes are in the phase tables below.
 
-- [x] Core loop: Start walk → during (timer, GPS distance, Pee/Poop/Water/Play with location) → end → summary → save/discard → history
-- [x] Map: live path + event markers during walk; route + markers in walk detail (history)
-- [x] One dog profile: name, breed, photo; onboarding, edit, delete; minimal row on Home
-- [x] Splash + custom launch screen (logo on white)
-- [x] Water / Play events (same flow as Pee/Poop; summary, detail, map)
-- [x] Walk notes (optional per walk; editable in summary and walk detail)
-- [x] Settings screen (distance km/mi, temperature °C/°F, date format, map style Standard/Hybrid/Satellite)
-- [x] Basic stats on Home (walks this week, distance this week, streak)
-- [x] Local-only (UserDefaults); no backend, no login
-- [x] README, CONTEXT, MAP_STRATEGY, LAUNCH_SCREEN, App Store–related docs
-- [x] Who's walking? sheet: selection stable (set on sheet open via `onChange`; no reset on tap)
+**Implemented in the app today:**
 
-**Not done yet:** Accessibility (VoiceOver, Dynamic Type, Reduce Motion), Export/backup. **Later phases:** Multi-dog, route planning, turn-by-turn, weather, backend, auth, community, POIs, gamification.
+- [x] Core loop: start walk → during (timer, GPS distance, route polyline) → Pee/Poop/Water/Play with location → end → summary → save/discard → history
+- [x] Map: `WalkMapView` + `EventMarkerView` during walk and in walk detail; dog-color rings for multi-dog
+- [x] **Multi-dog:** `DogProfileStore` (many dogs), “who’s walking?” sheet, per-event `dogId`, history filter by dog, labels via `WalkDisplay` / `EventType`
+- [x] **User profile:** `UserProfileStore` (name, photo); onboarding (`OnboardingView`: profile → dog or skip); edit from Home / Settings
+- [x] Splash + launch assets
+- [x] Walk notes (summary + detail); weather at save (`SavedWeather`) shown in detail
+- [x] **Weather:** `WeatherService` + Open-Meteo; during walk + summary; `WeatherSuggestion`; DEBUG overrides in Settings
+- [x] Settings: units, date format, map style, temperature, export/restore, weather testing (DEBUG)
+- [x] Home stats: walks this week, distance this week, streak
+- [x] History: delete walks / delete all; walk detail delete; export includes user + dogs + walks
+- [x] Siri: log pee/poop/water/play (`WalkyTrailsIntents`)
+- [x] **Engineering:** `@EnvironmentObject` injection from `WalkyTrailsApp`; `Helpers/WalkDisplay.swift`; `docs/ARCHITECTURE.md`; `.cursor/rules/project-paths.mdc` (canonical **Documents** path)
+- [x] Local-only persistence (`UserDefaults`); no backend / login
+- [x] **Planned routes (Phase 2.2):** `PlanWalkView` + `WalkingDirectionsService`; `Walk.plannedRouteCoordinates`; map shows planned (dashed) vs recorded (tint) during walk and in history detail
+
+**Still open (see phase detail):**
+
+- [ ] Phase 1.1: run Accessibility Inspector / VoiceOver pass and fix issues (implementation mostly done)
+- [x] Phase 2.2: route planning (MapKit walking directions between waypoints; Home → Plan walk)
+- [ ] Phase 2.3: turn-by-turn
+- [ ] Phase 2.5–2.7: walk types, richer events, charts/trends
+- [ ] Phases 3–4: backend, community (not started)
+
+**Progress tracker:** This file (`docs/DEVELOPMENT_PLAN.md`) is the single product/development progress document. Use the `[x]` / `[ ]` rows in each phase table; refresh **Current state** when you ship meaningful chunks.
 
 ---
 
@@ -61,7 +74,7 @@
 | 1.6 | Basic stats | Simple aggregates: total walks this week, distance this week, streak (on Home). | [x] |
 | 1.7 | Siri hands-free | Log pee/poop/water/play via Siri during a walk (no touch). See docs/SIRI_PHRASES.md. | [x] |
 
-**Phase 1 complete when:** All rows are [x] and validated. **Exit criteria:** App still local-only, one dog; better usability and a bit of "Strava-like" stats.
+**Phase 1 complete when:** All rows are [x] and validated (including optional Accessibility Inspector pass in §1.1). **Exit criteria:** App still local-only; better usability and basic stats. *(Multi-dog and weather are tracked in Phase 2 but are already implemented in code.)*
 
 ---
 
@@ -126,7 +139,7 @@ Use these to implement and to know when an item is done. Check off steps with `[
 | # | Feature | Notes | Status |
 |---|---------|--------|--------|
 | 2.1 | User profile + multi-dog | User profile (you: name, photo) in Settings; onboarding: your profile then first dog or skip. Multiple dogs; choose dog(s) per walk; history filtered by dog. Export/restore: user + dogs + walks. *Delete dog:* removed from profile only; past walks/events keep their `dogIds`; history still shows those walks; deleted dog's name no longer appears in labels; filter-by-dog only lists current dogs. | [x] |
-| 2.2 | Route planning (local) | "Plan a walk": set distance/duration or area; draw or pick waypoints; follow route during walk (no turn-by-turn yet). | [ ] |
+| 2.2 | Route planning (local) | **Shipped:** Home **Plan walk** → `PlanWalkView`: tap waypoints (or “Use my location as first stop”), **Start walk** runs **`MKDirections` walking** (`WalkingDirectionsService`) and saves `plannedRouteCoordinates` on the walk. **During walk / detail:** dashed secondary polyline + solid recorded path in `WalkMapView`. Straight-line fallback per failed leg. | [x] |
 | 2.3 | Turn-by-turn (optional) | Directions along a planned route (MapKit directions or similar). | [ ] |
 | 2.4 | Weather & suggestions (simplified) | Current weather on during-walk/summary; simple rules: rain soon → suggest shorter walk, hot → caution. *Expand later:* AI wording, shaded routes. | [x] |
 | 2.5 | Walk types | Tag walks: regular, training, social, vet visit (filter in history). | [ ] |
@@ -134,6 +147,15 @@ Use these to implement and to know when an item is done. Check off steps with `[
 | 2.7 | Stats and trends | Weekly/monthly distance, events over time, simple charts. | [ ] |
 
 **Exit criteria:** Single-user app that feels "Strava-like" for dog walks (plan, record, review, stats), still local-first.
+
+#### 2.2 Route planning (local) — MVP
+
+- **Approach:** **B** — walking routes via MapKit (`MKDirections`, `transportType = .walking`) between user-placed waypoints; concatenate polylines for one planned path.
+- **UX:** Planning screen (map) → add/reorder or clear waypoints (exact editing UX TBD) → confirm → start walk with planned coordinates stored on the active walk (or attached model).
+- **During walk:** Map shows planned route (e.g. distinct style) and live recorded route; events unchanged.
+- **Persistence:** Save planned polyline with finished walk when useful for history/detail (optional toggle or always store).
+- **Out of scope for 2.2:** Turn-by-turn, voice, mid-walk reroute (2.3+).
+- **Resilience:** If a directions request fails for a segment, use a straight line for that segment and optionally show a non-blocking message.
 
 #### 2.4 Weather & walk suggestions (simplified)
 

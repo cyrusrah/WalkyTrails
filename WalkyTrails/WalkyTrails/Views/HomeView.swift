@@ -13,6 +13,9 @@ struct HomeView: View {
     @EnvironmentObject var settings: SettingsStore
     @State private var showStartWalkSheet = false
     @State private var selectedDogIds: Set<UUID> = []
+    @State private var showPlanWalkSheet = false
+    @State private var planWalkPickDogsFirst = false
+    @State private var planWalkDogIds: [UUID] = []
 
     private var greeting: String {
         let userName = userStore.user.name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -113,12 +116,32 @@ struct HomeView: View {
             .padding(.horizontal, 24)
             .accessibilityLabel("Start walk")
             .accessibilityHint("Begins tracking a new walk with timer and GPS")
-            .sheet(isPresented: $showStartWalkSheet) {
-                startWalkSheet
+            Button {
+                guard !dogStore.dogs.isEmpty else { return }
+                if dogStore.dogs.count == 1 {
+                    planWalkDogIds = [dogStore.dogs[0].id]
+                    planWalkPickDogsFirst = false
+                    showPlanWalkSheet = true
+                } else {
+                    planWalkPickDogsFirst = true
+                    showPlanWalkSheet = true
+                }
+            } label: {
+                Label("Plan walk", systemImage: "map")
+                    .font(.body)
+                    .frame(maxWidth: .infinity)
+                    .padding()
             }
-            .onChange(of: showStartWalkSheet) { _, isShowing in
-                if isShowing { selectedDogIds = Set(dogStore.dogs.map(\.id)) }
-            }
+            .buttonStyle(.bordered)
+            .padding(.horizontal, 24)
+            .padding(.top, 10)
+            .disabled(dogStore.dogs.isEmpty)
+            .accessibilityLabel("Plan walk")
+            .accessibilityHint(
+                dogStore.dogs.isEmpty
+                    ? "Add a dog profile first to plan a route"
+                    : "Place waypoints on a map, then build a walking route and start"
+            )
             NavigationLink {
                 WalkHistoryView()
             } label: {
@@ -132,6 +155,23 @@ struct HomeView: View {
             .accessibilityLabel("Walk history")
             .accessibilityHint("Opens list of past walks")
             Spacer()
+        }
+        .sheet(isPresented: $showStartWalkSheet) {
+            startWalkSheet
+        }
+        .sheet(isPresented: $showPlanWalkSheet) {
+            planWalkSheet
+        }
+        .onChange(of: showStartWalkSheet) { _, isShowing in
+            if isShowing { selectedDogIds = Set(dogStore.dogs.map(\.id)) }
+        }
+        .onChange(of: showPlanWalkSheet) { _, isShowing in
+            if isShowing, planWalkPickDogsFirst {
+                selectedDogIds = Set(dogStore.dogs.map(\.id))
+            }
+            if !isShowing {
+                planWalkPickDogsFirst = false
+            }
         }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
@@ -245,6 +285,77 @@ struct HomeView: View {
         }
         .presentationDetents([.medium])
     }
+
+    @ViewBuilder
+    private var planWalkSheet: some View {
+        NavigationStack {
+            if planWalkPickDogsFirst {
+                List {
+                    if dogStore.dogs.isEmpty {
+                        Section {
+                            Text("Add a dog to plan a walk.")
+                                .foregroundStyle(.secondary)
+                            NavigationLink {
+                                DogProfileView(initialDog: nil, isOnboarding: false)
+                            } label: {
+                                Label("Add dog", systemImage: "plus.circle.fill")
+                            }
+                        }
+                    } else {
+                        Section {
+                            ForEach(dogStore.dogs) { dog in
+                                Button {
+                                    if selectedDogIds.contains(dog.id) {
+                                        selectedDogIds.remove(dog.id)
+                                    } else {
+                                        selectedDogIds.insert(dog.id)
+                                    }
+                                } label: {
+                                    HStack {
+                                        Text(dog.name.isEmpty ? "Unnamed" : dog.name)
+                                        Spacer()
+                                        if selectedDogIds.contains(dog.id) {
+                                            Image(systemName: "checkmark.circle.fill")
+                                                .foregroundStyle(Color.accentColor)
+                                        }
+                                    }
+                                }
+                            }
+                        } footer: {
+                            Text("Tap to select who is on this walk.")
+                        }
+                    }
+                }
+                .navigationTitle("Who's walking?")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { showPlanWalkSheet = false }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        if dogStore.dogs.isEmpty {
+                            NavigationLink {
+                                DogProfileView(initialDog: nil, isOnboarding: false)
+                            } label: {
+                                Text("Add dog")
+                            }
+                            .fontWeight(.semibold)
+                        } else {
+                            Button("Next") {
+                                planWalkDogIds = Array(selectedDogIds)
+                                planWalkPickDogsFirst = false
+                            }
+                            .disabled(selectedDogIds.isEmpty)
+                            .fontWeight(.semibold)
+                        }
+                    }
+                }
+            } else {
+                PlanWalkView(dogIds: planWalkDogIds)
+            }
+        }
+        .presentationDetents([.large])
+    }
 }
 
 #Preview {
@@ -253,4 +364,5 @@ struct HomeView: View {
         .environmentObject(UserProfileStore())
         .environmentObject(DogProfileStore())
         .environmentObject(SettingsStore())
+        .environmentObject(LocationManager())
 }

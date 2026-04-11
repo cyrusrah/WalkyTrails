@@ -20,17 +20,23 @@ struct WalkDetailView: View {
         walk.routeForMap.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
     }
 
+    private var plannedCoords: [CLLocationCoordinate2D] {
+        walk.plannedRouteForMap.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
+    }
+
     private var mapPosition: MapCameraPosition {
-        if routeCoords.isEmpty { return .automatic }
-        return .region(WalkMapView.regionFitting(coordinates: routeCoords))
+        let combined = routeCoords + plannedCoords
+        if combined.isEmpty { return .automatic }
+        return .region(WalkMapView.regionFitting(coordinates: combined))
     }
 
     var body: some View {
         List {
-            if !routeCoords.isEmpty || walk.events.contains(where: { $0.coordinate != nil }) {
+            if !routeCoords.isEmpty || !plannedCoords.isEmpty || walk.events.contains(where: { $0.coordinate != nil }) {
                 Section {
                     WalkMapView(
                         routeCoordinates: routeCoords,
+                        plannedRouteCoordinates: plannedCoords,
                         events: walk.events,
                         dogIds: walk.dogIds,
                         mapStyle: settings.mapStylePreference.mapStyle,

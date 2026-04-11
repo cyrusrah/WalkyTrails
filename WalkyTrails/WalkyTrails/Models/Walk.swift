@@ -112,6 +112,8 @@ struct Walk: Codable, Identifiable {
     var events: [WalkEvent]
     /// Full path; nil for walks saved before route recording.
     var routeCoordinates: [Coordinate]?
+    /// Street-snapped route from planning (MapKit walking directions); nil if walk was not planned.
+    var plannedRouteCoordinates: [Coordinate]?
     /// Optional free-text notes (e.g. "Sunny, met a friend").
     var notes: String?
     /// IDs of dogs on this walk; empty for walks saved before multi-dog.
@@ -133,6 +135,11 @@ struct Walk: Codable, Identifiable {
         routeCoordinates ?? []
     }
 
+    /// Planned path for map overlay; empty if none.
+    var plannedRouteForMap: [Coordinate] {
+        plannedRouteCoordinates ?? []
+    }
+
     init(
         id: UUID = UUID(),
         startTime: Date = Date(),
@@ -140,6 +147,7 @@ struct Walk: Codable, Identifiable {
         distanceMeters: Double = 0,
         events: [WalkEvent] = [],
         routeCoordinates: [Coordinate]? = nil,
+        plannedRouteCoordinates: [Coordinate]? = nil,
         notes: String? = nil,
         dogIds: [UUID] = [],
         savedWeather: SavedWeather? = nil
@@ -150,6 +158,7 @@ struct Walk: Codable, Identifiable {
         self.distanceMeters = distanceMeters
         self.events = events
         self.routeCoordinates = routeCoordinates
+        self.plannedRouteCoordinates = plannedRouteCoordinates
         self.notes = notes
         self.dogIds = dogIds
         self.savedWeather = savedWeather
@@ -163,6 +172,7 @@ struct Walk: Codable, Identifiable {
         distanceMeters = try c.decode(Double.self, forKey: .distanceMeters)
         events = try c.decode([WalkEvent].self, forKey: .events)
         routeCoordinates = try c.decodeIfPresent([Coordinate].self, forKey: .routeCoordinates)
+        plannedRouteCoordinates = try c.decodeIfPresent([Coordinate].self, forKey: .plannedRouteCoordinates)
         notes = try c.decodeIfPresent(String.self, forKey: .notes)
         dogIds = try c.decodeIfPresent([UUID].self, forKey: .dogIds) ?? []
         savedWeather = try c.decodeIfPresent(SavedWeather.self, forKey: .savedWeather)
@@ -176,13 +186,14 @@ struct Walk: Codable, Identifiable {
         try c.encode(distanceMeters, forKey: .distanceMeters)
         try c.encode(events, forKey: .events)
         try c.encodeIfPresent(routeCoordinates, forKey: .routeCoordinates)
+        try c.encodeIfPresent(plannedRouteCoordinates, forKey: .plannedRouteCoordinates)
         try c.encodeIfPresent(notes, forKey: .notes)
         try c.encode(dogIds, forKey: .dogIds)
         try c.encodeIfPresent(savedWeather, forKey: .savedWeather)
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, startTime, endTime, distanceMeters, events, routeCoordinates, notes, dogIds, savedWeather
+        case id, startTime, endTime, distanceMeters, events, routeCoordinates, plannedRouteCoordinates, notes, dogIds, savedWeather
     }
 
     mutating func end(route: [Coordinate]) {

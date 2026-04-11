@@ -49,6 +49,18 @@ final class LocationManager: NSObject, ObservableObject {
         manager.stopUpdatingLocation()
     }
 
+    /// Location updates for map preview (e.g. route planning) without resetting walk metrics.
+    func startPreviewLocationUpdates() {
+        guard CLLocationManager.locationServicesEnabled() else { return }
+        manager.startUpdatingLocation()
+    }
+
+    /// Stops preview updates when not in an active walk.
+    func stopPreviewLocationUpdates() {
+        guard !isTracking else { return }
+        manager.stopUpdatingLocation()
+    }
+
     private func addDistance(from newLocation: CLLocation) {
         guard isTracking else { return }
         if let last = lastLocation {
