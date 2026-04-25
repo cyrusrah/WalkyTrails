@@ -94,17 +94,8 @@ struct WalkDetailView: View {
                     .padding(.horizontal, WTTheme.Spacing.lg)
 
                     Spacer(minLength: 0)
-
-                    HStack(spacing: WTTheme.Spacing.sm) {
-                        Button("Done") { }
-                            .wtButton(.secondary, size: .large)
-                            .accessibilityLabel("Done")
-                            .accessibilityHint("Returns to the previous screen")
-                    }
-                    .padding(.horizontal, WTTheme.Spacing.lg)
-                    .padding(.bottom, safeBottom + 10)
-                    .opacity(0) // keep spacing consistent with summary (buttons live elsewhere in history flow)
                 }
+                .padding(.bottom, safeBottom + 10)
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
         }
