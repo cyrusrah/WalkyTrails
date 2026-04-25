@@ -17,21 +17,28 @@ struct WeatherDisplayView: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
                 Image(systemName: "cloud.sun")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(WTTheme.ColorToken.mutedText)
                 Text(settings.formattedTemperature(celsius: temperatureCelsius) + " · " + conditionDescription)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .font(WTTheme.Typography.callout)
+                    .foregroundStyle(WTTheme.ColorToken.mutedText)
                 Spacer()
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+            .background(
+                RoundedRectangle(cornerRadius: WTTheme.Radius.sm, style: .continuous)
+                    .fill(.white)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: WTTheme.Radius.sm, style: .continuous)
+                            .stroke(WTTheme.ColorToken.stone, lineWidth: WTTheme.Stroke.hairline)
+                    )
+            )
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Weather: \(settings.formattedTemperature(celsius: temperatureCelsius)), \(conditionDescription)")
             if let message = suggestionMessage {
                 Text(message)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(WTTheme.Typography.caption)
+                    .foregroundStyle(WTTheme.ColorToken.mutedText)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }

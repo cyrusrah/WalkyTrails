@@ -98,6 +98,9 @@ struct DogProfileView: View {
                 }
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(WTTheme.ColorToken.warmGrey)
+        .tint(WTTheme.ColorToken.brandOrange)
         .navigationTitle(isOnboarding ? "Add Your First Dog" : (isAddMode ? "New Dog" : "Edit Dog"))
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(isOnboarding)
@@ -154,7 +157,7 @@ struct DogProfileView: View {
         } else {
             Image(systemName: "pawprint.circle.fill")
                 .font(.system(size: photoSize * 0.8))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(WTTheme.ColorToken.mutedText)
                 .frame(width: photoSize, height: photoSize)
         }
     }

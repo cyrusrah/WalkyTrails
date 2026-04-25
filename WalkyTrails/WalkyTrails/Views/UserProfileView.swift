@@ -57,6 +57,9 @@ struct UserProfileView: View {
                 Text("Profile")
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(WTTheme.ColorToken.warmGrey)
+        .tint(WTTheme.ColorToken.brandOrange)
         .navigationTitle(isOnboarding ? "Set Up Your Profile" : "Your Profile")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(isOnboarding)
@@ -90,7 +93,7 @@ struct UserProfileView: View {
         } else {
             Image(systemName: "person.circle.fill")
                 .font(.system(size: photoSize))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(WTTheme.ColorToken.mutedText)
         }
     }
 

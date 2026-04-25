@@ -97,7 +97,7 @@ struct SettingsView: View {
         Section {
             ForEach(dogStore.dogs) { dog in
                 NavigationLink {
-                    DogProfileView(initialDog: dog, isOnboarding: false)
+                    DogDashboardView(dogId: dog.id)
                 } label: {
                     Text(dog.name.isEmpty ? "Unnamed dog" : dog.name)
                 }
@@ -110,7 +110,7 @@ struct SettingsView: View {
         } header: {
             Text("Dogs")
         } footer: {
-            Text("Choose who's walking when you start a walk.")
+            Text("View stats in the dog profile. Edit name, breed, and photo from the pencil icon.")
         }
     }
 

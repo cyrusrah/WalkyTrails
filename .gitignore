@@ -27,3 +27,6 @@ Pods/
 # Misc
 *.log
 .netrc
+
+# Cursor IDE
+.cursor/

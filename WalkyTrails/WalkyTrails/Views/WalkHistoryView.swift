@@ -19,6 +19,9 @@ struct WalkHistoryView: View {
 
     var body: some View {
         historyContent
+        .scrollContentBackground(.hidden)
+        .background(WTTheme.ColorToken.warmGrey)
+        .tint(WTTheme.ColorToken.brandOrange)
         .navigationTitle("History")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -66,6 +69,7 @@ struct WalkHistoryView: View {
                     }
                     .pickerStyle(.menu)
                 }
+                .listRowBackground(Color.clear)
             }
             ForEach(filteredWalks) { walk in
                 NavigationLink {
@@ -75,6 +79,8 @@ struct WalkHistoryView: View {
                 }
                 .accessibilityLabel(accessibilityLabel(for: walk))
                 .accessibilityHint("Opens walk details")
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
             }
             .onDelete { indexSet in
                 let ids = Set(indexSet.map { filteredWalks[$0].id })
@@ -85,19 +91,32 @@ struct WalkHistoryView: View {
     }
 
     private func walkRow(walk: Walk) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(settings.formattedDate(walk.startTime))
-                .font(.headline)
-            Text(formattedDuration(seconds: walk.durationSeconds))
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            if !walk.events.isEmpty {
-                Text("\(walk.events.count) event(s)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+        WTCard {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(settings.formattedDate(walk.startTime))
+                        .font(.system(.headline, design: .default).weight(.semibold))
+                        .foregroundStyle(WTTheme.ColorToken.charcoal)
+                    Spacer()
+                    if walk.distanceMeters > 0 {
+                        Text(settings.formattedDistanceShort(walk.distanceMeters))
+                            .font(.system(.callout, design: .default).weight(.semibold))
+                            .foregroundStyle(WTTheme.ColorToken.mutedText)
+                    }
+                }
+
+                Text(formattedDuration(seconds: walk.durationSeconds))
+                    .font(WTTheme.Typography.callout)
+                    .foregroundStyle(WTTheme.ColorToken.mutedText)
+
+                if !walk.events.isEmpty {
+                    Text("\(walk.events.count) event(s)")
+                        .font(WTTheme.Typography.caption)
+                        .foregroundStyle(WTTheme.ColorToken.mutedText)
+                }
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, WTTheme.Spacing.xxs)
     }
 
     private func accessibilityLabel(for walk: Walk) -> String {

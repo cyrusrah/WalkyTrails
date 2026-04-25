@@ -3,6 +3,7 @@
 //  WalkyTrails
 //
 
+import MapKit
 import SwiftUI
 import UIKit
 
@@ -11,11 +12,15 @@ struct HomeView: View {
     @EnvironmentObject var userStore: UserProfileStore
     @EnvironmentObject var dogStore: DogProfileStore
     @EnvironmentObject var settings: SettingsStore
+    @EnvironmentObject var locationManager: LocationManager
     @State private var showStartWalkSheet = false
     @State private var selectedDogIds: Set<UUID> = []
     @State private var showPlanWalkSheet = false
     @State private var planWalkPickDogsFirst = false
     @State private var planWalkDogIds: [UUID] = []
+    @State private var searchText: String = ""
+    @State private var selectedFilter: HomeFilter = .parks
+    @State private var cameraPosition: MapCameraPosition = .userLocation(fallback: .automatic)
 
     private var greeting: String {
         let userName = userStore.user.name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -28,6 +33,20 @@ struct HomeView: View {
 
     private var hasUserPhoto: Bool { userStore.user.photoData != nil }
     private var hasAnyDog: Bool { dogStore.hasAnyDog }
+
+    enum HomeFilter: String, CaseIterable, Identifiable {
+        case parks = "Parks"
+        case water = "Water"
+        case dogParks = "Dog Parks"
+        var id: String { rawValue }
+        var icon: String {
+            switch self {
+            case .parks: return "tree.fill"
+            case .water: return "drop.fill"
+            case .dogParks: return "pawprint.fill"
+            }
+        }
+    }
 
     private var walksThisWeek: [Walk] {
         let cal = Calendar.current
@@ -50,111 +69,48 @@ struct HomeView: View {
     }
 
     private var statsSection: some View {
-        HStack(spacing: 24) {
-            VStack(spacing: 4) {
-                Text("\(walksThisWeek.count)")
-                    .font(.title2.weight(.semibold))
-                Text("Walks this week")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            VStack(spacing: 4) {
-                Text(settings.formattedDistanceShort(walksThisWeek.reduce(0) { $0 + $1.distanceMeters }))
-                    .font(.title2.weight(.semibold))
-                Text("This week")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            if currentStreakDays > 0 {
-                VStack(spacing: 4) {
-                    Text("\(currentStreakDays)")
-                        .font(.title2.weight(.semibold))
-                    Text("Streak")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+        WTCard {
+            HStack(spacing: 18) {
+                statPill(value: "\(walksThisWeek.count)", label: "Walks")
+                Divider()
+                    .overlay(WTTheme.ColorToken.stone)
+                statPill(
+                    value: settings.formattedDistanceShort(walksThisWeek.reduce(0) { $0 + $1.distanceMeters }),
+                    label: "This week"
+                )
+                if currentStreakDays > 0 {
+                    Divider()
+                        .overlay(WTTheme.ColorToken.stone)
+                    statPill(value: "\(currentStreakDays)", label: "Streak")
                 }
             }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 12)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Stats: \(walksThisWeek.count) walks this week, \(settings.formattedDistanceShort(walksThisWeek.reduce(0) { $0 + $1.distanceMeters })) this week\(currentStreakDays > 0 ? ", \(currentStreakDays) day streak" : "")")
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            Spacer()
-            Text("WalkyTrails")
-                .font(.largeTitle)
-                .fontWeight(.bold)
-            Text(greeting)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal)
-            if !store.walks.isEmpty {
-                statsSection
-                    .padding(.horizontal, 24)
-                    .padding(.top, 16)
-            }
-            Spacer()
-            Button {
-                if dogStore.dogs.count == 1 {
-                    store.startWalk(dogIds: [dogStore.dogs[0].id])
-                } else {
-                    selectedDogIds = Set(dogStore.dogs.map(\.id))
-                    showStartWalkSheet = true
+        ZStack(alignment: .bottom) {
+            WTTheme.ColorToken.warmGrey.ignoresSafeArea()
+
+            mapLayer
+
+            VStack(spacing: WTTheme.Spacing.sm) {
+                topSearchAndChips
+                    .padding(.horizontal, WTTheme.Spacing.lg)
+                    .padding(.top, WTTheme.Spacing.md)
+
+                Spacer()
+
+                VStack(spacing: WTTheme.Spacing.sm) {
+                    placeCard
+                        .padding(.horizontal, WTTheme.Spacing.lg)
+
+                    startWalkCTA
+                        .padding(.horizontal, WTTheme.Spacing.lg)
                 }
-            } label: {
-                Label("Start Walk", systemImage: "figure.walk")
-                    .font(.title2)
-                    .frame(maxWidth: .infinity)
-                    .padding()
+                .padding(.bottom, WTTheme.Spacing.lg)
             }
-            .buttonStyle(.borderedProminent)
-            .padding(.horizontal, 24)
-            .accessibilityLabel("Start walk")
-            .accessibilityHint("Begins tracking a new walk with timer and GPS")
-            Button {
-                guard !dogStore.dogs.isEmpty else { return }
-                if dogStore.dogs.count == 1 {
-                    planWalkDogIds = [dogStore.dogs[0].id]
-                    planWalkPickDogsFirst = false
-                    showPlanWalkSheet = true
-                } else {
-                    planWalkPickDogsFirst = true
-                    showPlanWalkSheet = true
-                }
-            } label: {
-                Label("Plan walk", systemImage: "map")
-                    .font(.body)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-            }
-            .buttonStyle(.bordered)
-            .padding(.horizontal, 24)
-            .padding(.top, 10)
-            .disabled(dogStore.dogs.isEmpty)
-            .accessibilityLabel("Plan walk")
-            .accessibilityHint(
-                dogStore.dogs.isEmpty
-                    ? "Add a dog profile first to plan a route"
-                    : "Place waypoints on a map, then build a walking route and start"
-            )
-            NavigationLink {
-                WalkHistoryView()
-            } label: {
-                Label("History", systemImage: "clock.arrow.circlepath")
-                    .font(.body)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-            }
-            .buttonStyle(.bordered)
-            .padding(.horizontal, 24)
-            .accessibilityLabel("Walk history")
-            .accessibilityHint("Opens list of past walks")
-            Spacer()
         }
         .sheet(isPresented: $showStartWalkSheet) {
             startWalkSheet
@@ -190,12 +146,154 @@ struct HomeView: View {
                 NavigationLink {
                     SettingsView()
                 } label: {
-                    Image(systemName: "gearshape")
+                    Image(systemName: "slider.horizontal.3")
                 }
                 .accessibilityLabel("Settings")
                 .accessibilityHint("Units, date format, and map style")
             }
         }
+    }
+
+    private var mapLayer: some View {
+        Map(position: $cameraPosition) {
+            UserAnnotation()
+        }
+        .mapStyle(settings.mapStylePreference.mapStyle)
+        .mapControlVisibility(.hidden)
+        .ignoresSafeArea()
+        .tint(WTTheme.ColorToken.route)
+        .overlay(alignment: .trailing) {
+            VStack(spacing: WTTheme.Spacing.sm) {
+                mapFab(systemImage: "location.fill") {
+                    cameraPosition = .userLocation(fallback: .automatic)
+                }
+                mapFab(systemImage: "square.3.layers.3d") {
+                    cycleMapStyle()
+                }
+            }
+            .padding(.trailing, WTTheme.Spacing.lg)
+            .padding(.top, 160)
+        }
+    }
+
+    private var topSearchAndChips: some View {
+        VStack(spacing: WTTheme.Spacing.sm) {
+            WTSearchBar(text: $searchText)
+                .overlay(alignment: .trailing) {
+                    Button {
+                        // placeholder for filters panel
+                    } label: {
+                        Image(systemName: "line.3.horizontal.decrease")
+                            .foregroundStyle(WTTheme.ColorToken.mutedText)
+                            .padding(.trailing, 10)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Filters")
+                }
+
+            HStack(spacing: WTTheme.Spacing.xs) {
+                ForEach(HomeFilter.allCases) { filter in
+                    WTChip(
+                        title: filter.rawValue,
+                        systemImage: filter.icon,
+                        isSelected: selectedFilter == filter
+                    ) {
+                        selectedFilter = filter
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    private var placeCard: some View {
+        WTCard {
+            HStack(spacing: WTTheme.Spacing.sm) {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(WTTheme.ColorToken.mapWater.opacity(0.55))
+                    .frame(width: 56, height: 56)
+                    .overlay(
+                        Image(systemName: "photo")
+                            .foregroundStyle(WTTheme.ColorToken.mutedText)
+                    )
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Riverside Park")
+                        .font(.system(.headline, design: .default).weight(.semibold))
+                        .foregroundStyle(WTTheme.ColorToken.charcoal)
+                    Text("0.8 km away · Dog friendly")
+                        .font(WTTheme.Typography.caption)
+                        .foregroundStyle(WTTheme.ColorToken.mutedText)
+                    Text("Popular now")
+                        .font(WTTheme.Typography.caption)
+                        .foregroundStyle(WTTheme.ColorToken.mutedText)
+                }
+
+                Spacer(minLength: 0)
+
+                Image(systemName: "chevron.right")
+                    .foregroundStyle(WTTheme.ColorToken.mutedText)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Riverside Park, 0.8 kilometers away, dog friendly")
+    }
+
+    private var startWalkCTA: some View {
+        Button {
+            if dogStore.dogs.count == 1 {
+                store.startWalk(dogIds: [dogStore.dogs[0].id])
+            } else {
+                selectedDogIds = Set(dogStore.dogs.map(\.id))
+                showStartWalkSheet = true
+            }
+        } label: {
+            Text("Start Walk")
+                .frame(maxWidth: .infinity)
+        }
+        .wtButton(.primary, size: .large)
+        .accessibilityLabel("Start walk")
+        .accessibilityHint("Begins tracking a new walk with timer and GPS")
+    }
+
+    private func mapFab(systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(WTTheme.ColorToken.forest)
+                .frame(width: 42, height: 42)
+                .background(
+                    Circle()
+                        .fill(.white)
+                        .overlay(Circle().stroke(WTTheme.ColorToken.stone, lineWidth: WTTheme.Stroke.hairline))
+                        .shadow(color: .black.opacity(WTTheme.Shadow.opacity), radius: 12, x: 0, y: 6)
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Map action")
+    }
+
+    private func cycleMapStyle() {
+        switch settings.mapStylePreference {
+        case .standard:
+            settings.mapStylePreference = .hybrid
+        case .hybrid:
+            settings.mapStylePreference = .imagery
+        case .imagery:
+            settings.mapStylePreference = .standard
+        }
+    }
+
+    private func statPill(value: String, label: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(value)
+                .font(.system(.title3, design: .default).weight(.bold))
+                .foregroundStyle(WTTheme.ColorToken.charcoal)
+            Text(label)
+                .font(WTTheme.Typography.caption)
+                .foregroundStyle(WTTheme.ColorToken.mutedText)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var profileCircle: some View {

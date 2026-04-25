@@ -94,8 +94,10 @@ enum MapStylePreference: String, Codable, CaseIterable {
     @available(iOS 17.0, *)
     var mapStyle: MapStyle {
         switch self {
-        case .standard: return .standard(elevation: .realistic)
-        case .hybrid: return .hybrid(elevation: .realistic)
+        case .standard:
+            return .standard(elevation: .flat)
+        case .hybrid:
+            return .hybrid(elevation: .flat)
         case .imagery: return .imagery(elevation: .realistic)
         }
     }
